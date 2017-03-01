@@ -39,48 +39,16 @@
 /* Application-specified header. */
 #include "blecent.h"
 
+#define HRM_16BIT                       (0x01u)
+#define HRM_CONTACT_SUPPORT             (0x02u)
+#define HRM_CONTACT_STATUS              (0x04u)
+#define HRM_EE_SUPPORT                  (0x08u)
+#define HRM_RR_SUPPORT                  (0x10u)
+
 /** Log data. */
 struct log blecent_log;
 
 static int blecent_gap_event(struct ble_gap_event *event, void *arg);
-
-/**
- * Application callback.  Called when the read of the ANS Supported New Alert
- * Category characteristic has completed.
- */
-static int
-blecent_on_read(uint16_t conn_handle,
-                const struct ble_gatt_error *error,
-                struct ble_gatt_attr *attr,
-                void *arg)
-{
-    BLECENT_LOG(INFO, "Read complete; status=%d conn_handle=%d", error->status,
-                conn_handle);
-    if (error->status == 0) {
-        BLECENT_LOG(INFO, " attr_handle=%d value=", attr->handle);
-        print_mbuf(attr->om);
-    }
-    BLECENT_LOG(INFO, "\n");
-
-    return 0;
-}
-
-/**
- * Application callback.  Called when the write to the ANS Alert Notification
- * Control Point characteristic has completed.
- */
-static int
-blecent_on_write(uint16_t conn_handle,
-                 const struct ble_gatt_error *error,
-                 struct ble_gatt_attr *attr,
-                 void *arg)
-{
-    BLECENT_LOG(INFO, "Write complete; status=%d conn_handle=%d "
-                      "attr_handle=%d\n",
-                error->status, conn_handle, attr->handle);
-
-    return 0;
-}
 
 /**
  * Application callback.  Called when the attempt to subscribe to notifications
@@ -114,57 +82,17 @@ blecent_on_subscribe(uint16_t conn_handle,
 static void
 blecent_read_write_subscribe(const struct peer *peer)
 {
-    const struct peer_chr *chr;
     const struct peer_dsc *dsc;
     uint8_t value[2];
     int rc;
 
-    /* Read the supported-new-alert-category characteristic. */
-    chr = peer_chr_find_uuid(peer,
-                             BLE_UUID16_DECLARE(BLECENT_SVC_ALERT_UUID),
-                             BLE_UUID16_DECLARE(BLECENT_CHR_SUP_NEW_ALERT_CAT_UUID));
-    if (chr == NULL) {
-        BLECENT_LOG(ERROR, "Error: Peer doesn't support the Supported New "
-                           "Alert Category characteristic\n");
-        goto err;
-    }
-
-    rc = ble_gattc_read(peer->conn_handle, chr->chr.val_handle,
-                        blecent_on_read, NULL);
-    if (rc != 0) {
-        BLECENT_LOG(ERROR, "Error: Failed to read characteristic; rc=%d\n",
-                    rc);
-        goto err;
-    }
-
-    /* Write two bytes (99, 100) to the alert-notification-control-point
-     * characteristic.
-     */
-    chr = peer_chr_find_uuid(peer,
-                             BLE_UUID16_DECLARE(BLECENT_SVC_ALERT_UUID),
-                             BLE_UUID16_DECLARE(BLECENT_CHR_ALERT_NOT_CTRL_PT));
-    if (chr == NULL) {
-        BLECENT_LOG(ERROR, "Error: Peer doesn't support the Alert "
-                           "Notification Control Point characteristic\n");
-        goto err;
-    }
-
-    value[0] = 99;
-    value[1] = 100;
-    rc = ble_gattc_write_flat(peer->conn_handle, chr->chr.val_handle,
-                              value, sizeof value, blecent_on_write, NULL);
-    if (rc != 0) {
-        BLECENT_LOG(ERROR, "Error: Failed to write characteristic; rc=%d\n",
-                    rc);
-    }
-
-    /* Subscribe to notifications for the Unread Alert Status characteristic.
+    /* Subscribe to notifications for the Heart Rate Measurement characteristic.
      * A central enables notifications by writing two bytes (1, 0) to the
      * characteristic's client-characteristic-configuration-descriptor (CCCD).
      */
     dsc = peer_dsc_find_uuid(peer,
-                             BLE_UUID16_DECLARE(BLECENT_SVC_ALERT_UUID),
-                             BLE_UUID16_DECLARE(BLECENT_CHR_UNR_ALERT_STAT_UUID),
+                             BLE_UUID16_DECLARE(BLECENTHR_SVC_HEART_RATE_UUID),
+                             BLE_UUID16_DECLARE(BLECENTHR_CHR_HEART_RATE_MEASUREMENT_UUID),
                              BLE_UUID16_DECLARE(BLE_GATT_DSC_CLT_CFG_UUID16));
     if (dsc == NULL) {
         BLECENT_LOG(ERROR, "Error: Peer lacks a CCCD for the Unread Alert "
@@ -245,6 +173,7 @@ blecent_scan(void)
 
     rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &disc_params,
                       blecent_gap_event, NULL);
+
     if (rc != 0) {
         BLECENT_LOG(ERROR, "Error initiating GAP discovery procedure; rc=%d\n",
                     rc);
@@ -279,7 +208,7 @@ blecent_should_connect(const struct ble_gap_disc_desc *disc)
      * service (0x1811).
      */
     for (i = 0; i < fields.num_uuids16; i++) {
-        if (ble_uuid_u16(&fields.uuids16[i].u) == BLECENT_SVC_ALERT_UUID) {
+        if (ble_uuid_u16(&fields.uuids16[i].u) == BLECENTHR_SVC_HEART_RATE_UUID) {
             return 1;
         }
     }
@@ -304,6 +233,7 @@ blecent_connect_if_interesting(const struct ble_gap_disc_desc *disc)
 
     /* Scanning must be stopped before a connection can be initiated. */
     rc = ble_gap_disc_cancel();
+
     if (rc != 0) {
         BLECENT_LOG(DEBUG, "Failed to cancel scan; rc=%d\n", rc);
         return;
@@ -320,6 +250,68 @@ blecent_connect_if_interesting(const struct ble_gap_disc_desc *disc)
                            addr_str(disc->addr.val));
         return;
     }
+}
+
+// HRS_SPEC_V10.pdf
+static int
+blecent_on_hr_notify(const struct os_mbuf *om)
+{
+    uint16_t measurement;
+    uint16_t energy_expenditure;
+    bool sensor_contact;
+    uint8_t offset = 0;
+    const uint8_t *bytes = om->om_data;
+    const uint8_t flags = bytes[offset++];
+
+    /*
+     *  "The value of the Sensor Contact Support bit is static while in a connection.
+     *  The value of the Sensor Contact Status bit may change while in a connection."
+     */
+    if(flags & HRM_CONTACT_SUPPORT){
+        sensor_contact = flags & HRM_CONTACT_STATUS;
+        BLECENT_LOG(INFO, "sensor_contact=%d\r\n", sensor_contact);
+    }
+
+    if(flags & HRM_16BIT){
+        uint8_t lower = bytes[offset++];
+        uint8_t upper = bytes[offset++] << 8;
+        measurement = upper | lower;
+    }else{
+        measurement = bytes[offset++];
+    }
+
+    BLECENT_LOG(INFO, "measurement=%d\r\n", measurement);
+
+    /*
+     *  "If energy expended is used, it is typically only included in the eart Rate Measurement
+     *  characteristic once every 10 measurements at a regular interval."
+     */
+    if(flags & HRM_EE_SUPPORT){
+        uint8_t lower = bytes[offset++];
+        uint8_t upper = bytes[offset++] << 8;
+        energy_expenditure = upper | lower;
+        BLECENT_LOG(INFO, "energy_expenditure=%d\r\n", energy_expenditure);
+    }
+
+    /*
+     *  "For a 23-octet ATT_MTU and the Heart Rate Measurement Value format set to UINT8,
+     *  the maximum number of RR-Interval Values that can be notified if Energy Expended is
+     *  BLUETOOTH SERVICE SPECIFICATION Page 12 of 15
+     *  Heart Rate Service
+     *  present is 8 and the maximum number of RR-Interval Values that can be notified if
+     *  Energy Expended is not present is 9."
+     */
+    if(flags & HRM_RR_SUPPORT){
+        while(offset<om->om_len)
+        {
+            uint8_t lower = bytes[offset++];
+            uint8_t upper = bytes[offset++] << 8;
+            uint16_t rr = upper | lower;
+            BLECENT_LOG(INFO, "rr=%d\r\n", rr);
+        }
+    }
+
+    return 0;
 }
 
 /**
@@ -426,6 +418,7 @@ blecent_gap_event(struct ble_gap_event *event, void *arg)
                     OS_MBUF_PKTLEN(event->notify_rx.om));
 
         /* Attribute data is contained in event->notify_rx.attr_data. */
+        blecent_on_hr_notify(event->notify_rx.om);
         return 0;
 
     case BLE_GAP_EVENT_MTU:
@@ -482,7 +475,7 @@ main(void)
     ble_hs_cfg.sync_cb = blecent_on_sync;
 
     /* Initialize data structures to track connected peers. */
-    rc = peer_init(MYNEWT_VAL(BLE_MAX_CONNECTIONS), 64, 64, 64);
+    rc = peer_init(MYNEWT_VAL(BLE_MAX_CONNECTIONS), 6, 17, 1);
     assert(rc == 0);
 
     /* Set the default device name. */

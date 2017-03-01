@@ -48,6 +48,9 @@ extern struct log blecent_log;
 #define BLECENT_CHR_UNR_ALERT_STAT_UUID     0x2A45
 #define BLECENT_CHR_ALERT_NOT_CTRL_PT       0x2A44
 
+#define BLECENTHR_SVC_HEART_RATE_UUID              0x180D
+#define BLECENTHR_CHR_HEART_RATE_MEASUREMENT_UUID  0x2A37
+
 /** GATT server. */
 void gatt_svr_register(void);
 void gatt_svr_init_cfg(struct ble_hs_cfg *cfg);
