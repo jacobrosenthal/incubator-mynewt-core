@@ -26,14 +26,9 @@
 #include <string.h>
 
 /* Nordic headers */
-#include <nrf.h>
+#include <nrfx.h>
+#include <nrfx_pwm.h>
 #include <nrf_pwm.h>
-#include <nrf_drv_pwm.h>
-#include <nrf_drv_clock.h>
-
-#include <app_util_platform.h>
-#include <nrf_drv_ppi.h>
-#include <nrf_drv_timer.h>
 
 /* Mynewt Nordic driver */
 #include "pwm_nrf52/pwm_nrf52.h"
@@ -41,9 +36,9 @@
 struct nrf52_pwm_dev_global {
     bool in_use;
     bool playing;
-    nrfx_drv_pwm_t drv_instance;
-    nrfx_drv_pwm_config_t config;
-    nrfx_pwm_values_individual_t duty_cycles;
+    nrfx_pwm_t drv_instance;
+    nrfx_pwm_config_t config;
+    nrf_pwm_values_individual_t duty_cycles;
 };
 
 static struct nrf52_pwm_dev_global instances[] =
@@ -51,8 +46,8 @@ static struct nrf52_pwm_dev_global instances[] =
 #if (PWM0_ENABLED == 1)
     [0].in_use = false,
     [0].playing = false,
-    [0].drv_instance = NRFX_DRV_PWM_INSTANCE(0),
-    [0].config = NRFX_DRV_PWM_DEFAULT_CONFIG(0),
+    [0].drv_instance = NRFX_PWM_INSTANCE(0),
+    [0].config = NRFX_PWM_DEFAULT_CONFIG,
     [0].duty_cycles = {0}
 #endif
 #if (PWM1_ENABLED == 1)
@@ -86,29 +81,29 @@ static struct nrf52_pwm_dev_global instances[] =
  * Initialize a driver instance.
  */
 static int
-init_instance(int inst_id, nrfx_drv_pwm_config_t* init_conf)
+init_instance(int inst_id, nrfx_pwm_config_t* init_conf)
 {
     if(!instances[inst_id].in_use) {
         return (EINVAL);
     }
-    nrfx_drv_pwm_config_t *config;
+    nrfx_pwm_config_t *config;
     memset(&instances[inst_id].duty_cycles, 0,
 		sizeof(instances[inst_id].duty_cycles));
 
     config = &instances[inst_id].config;
     if (!init_conf) {
-        config->output_pins[0] = NRFX_DRV_PWM_PIN_NOT_USED;
-        config->output_pins[1] = NRFX_DRV_PWM_PIN_NOT_USED;
-        config->output_pins[2] = NRFX_DRV_PWM_PIN_NOT_USED;
-        config->output_pins[3] = NRFX_DRV_PWM_PIN_NOT_USED;
-        config->irq_priority = APP_IRQ_PRIORITY_LOW;
-        config->base_clock   = NRFX_PWM_CLK_1MHz;
-        config->count_mode   = NRFX_PWM_MODE_UP;
+        config->output_pins[0] = NRFX_PWM_PIN_NOT_USED;
+        config->output_pins[1] = NRFX_PWM_PIN_NOT_USED;
+        config->output_pins[2] = NRFX_PWM_PIN_NOT_USED;
+        config->output_pins[3] = NRFX_PWM_PIN_NOT_USED;
+        config->irq_priority = 3; /* APP_IRQ_PRIORITY_LOW */
+        config->base_clock   = NRF_PWM_CLK_1MHz;
+        config->count_mode   = NRF_PWM_MODE_UP;
         config->top_value    = 10000;
-        config->load_mode    = NRFX_PWM_LOAD_INDIVIDUAL;
-        config->step_mode    = NRFX_PWM_STEP_AUTO;
+        config->load_mode    = NRF_PWM_LOAD_INDIVIDUAL;
+        config->step_mode    = NRF_PWM_STEP_AUTO;
     } else {
-        memcpy(config, init_conf, sizeof(nrfx_drv_pwm_config_t));
+        memcpy(config, init_conf, sizeof(nrfx_pwm_config_t));
     }
 
     return (0);
@@ -185,7 +180,7 @@ nrf52_pwm_close(struct os_dev *odev)
     dev = (struct pwm_dev *) odev;
     inst_id = dev->pwm_instance_id;
 
-    nrfx_drv_pwm_uninit(&instances[inst_id].drv_instance);
+    nrfx_pwm_uninit(&instances[inst_id].drv_instance);
 
     cleanup_instance(inst_id);
 
@@ -210,10 +205,10 @@ play_current_config(struct nrf52_pwm_dev_global *instance)
             .end_delay           = 0
         };
 
-    nrf_drv_pwm_simple_playback(&instances->drv_instance,
-                                &seq,
-                                1,
-                                NRF_DRV_PWM_FLAG_LOOP);
+    nrfx_pwm_simple_playback(&instances->drv_instance,
+                             &seq,
+                             1,
+                             NRFX_PWM_FLAG_LOOP);
 }
 
 /**
@@ -231,15 +226,15 @@ nrf52_pwm_configure_channel(struct pwm_dev *dev,
                             struct pwm_chan_cfg *cfg)
 {
     int inst_id = dev->pwm_instance_id;
-    nrf_drv_pwm_config_t *config = &instances[inst_id].config;
+    nrfx_pwm_config_t *config = &instances[inst_id].config;
 
     config->output_pins[cnum] = cfg->pin;
     config->output_pins[cnum] |= (cfg->inverted) ?
-        NRF_DRV_PWM_PIN_INVERTED : config->output_pins[cnum];
+        NRFX_PWM_PIN_INVERTED : config->output_pins[cnum];
 
     if (instances[inst_id].playing) {
-        nrfx_drv_pwm_uninit(&instances[inst_id].drv_instance);
-        nrfx_drv_pwm_init(&instances[inst_id].drv_instance,
+        nrfx_pwm_uninit(&instances[inst_id].drv_instance);
+        nrfx_pwm_init(&instances[inst_id].drv_instance,
                          &instances[inst_id].config,
                          NULL);
 
@@ -267,21 +262,21 @@ nrf52_pwm_enable_duty_cycle(struct pwm_dev *dev, uint8_t cnum, uint16_t fraction
 {
     int stat;
     int inst_id = dev->pwm_instance_id;
-    nrf_drv_pwm_config_t *config;
+    nrfx_pwm_config_t *config;
     bool inverted;
 
     config = &instances[inst_id].config;
-    assert (config->output_pins[cnum] != NRF_DRV_PWM_PIN_NOT_USED);
-    inverted = ((config->output_pins[cnum] & NRF_DRV_PWM_PIN_INVERTED) != 0);
+    assert(config->output_pins[cnum] != NRFX_PWM_PIN_NOT_USED);
+    inverted = ((config->output_pins[cnum] & NRFX_PWM_PIN_INVERTED) != 0);
 
     ((uint16_t *) &instances[inst_id].duty_cycles)[cnum] =
         (inverted) ? fraction : config->top_value - fraction;
 
     if (!instances[inst_id].playing) {
-        stat = nrf_drv_pwm_init(&instances[inst_id].drv_instance,
+        stat = nrfx_pwm_init(&instances[inst_id].drv_instance,
                                 &instances[inst_id].config,
                                 NULL);
-        if (stat != NRF_SUCCESS) {
+        if (stat != NRFX_SUCCESS) {
             return (stat);
         }
         play_current_config(&instances[inst_id]);
@@ -302,10 +297,10 @@ static int
 nrf52_pwm_disable(struct pwm_dev *dev, uint8_t cnum)
 {
     int inst_id = dev->pwm_instance_id;
-    instances[inst_id].config.output_pins[cnum] = NRF_DRV_PWM_PIN_NOT_USED;
+    instances[inst_id].config.output_pins[cnum] = NRFX_PWM_PIN_NOT_USED;
 
-    nrfx_drv_pwm_uninit(&instances[inst_id].drv_instance);
-    nrfx_drv_pwm_init(&instances[inst_id].drv_instance,
+    nrfx_pwm_uninit(&instances[inst_id].drv_instance);
+    nrfx_pwm_init(&instances[inst_id].drv_instance,
                      &instances[inst_id].config,
                      NULL);
     /* check if there is any channel in use */
@@ -365,8 +360,8 @@ nrf52_pwm_set_frequency(struct pwm_dev *dev, uint32_t freq_hz)
     *top_value = base_freq_val / freq_hz;
 
     if (instances[inst_id].playing) {
-        nrfx_drv_pwm_uninit(&instances[inst_id].drv_instance);
-        nrfx_drv_pwm_init(&instances[inst_id].drv_instance,
+        nrfx_pwm_uninit(&instances[inst_id].drv_instance);
+        nrfx_pwm_init(&instances[inst_id].drv_instance,
                          &instances[inst_id].config,
                          NULL);
 

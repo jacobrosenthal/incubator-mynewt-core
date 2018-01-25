@@ -68,9 +68,13 @@ syscfg.defs:
         description: 'NRF52 RTC 0'
         value:  0
 
+    PWM:
+        description: 'NRF52 PWM'
+        value: 0
+
     PWM_0:
         description: 'NRF52 PWM 0'
-        value: 0
+        value: 1
 
     PWM_1:
         description: 'NRF52 PWM 1'
@@ -78,10 +82,6 @@ syscfg.defs:
 
     PWM_2:
         description: 'NRF52 PWM 2'
-        value: 0
-
-    PWM:
-        description: 'NRF52 PWM'
         value: 0
 
     SOFT_PWM:

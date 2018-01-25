@@ -32,6 +32,15 @@
 #ifndef NRFX_GLUE_H__
 #define NRFX_GLUE_H__
 
+#include <assert.h>
+//#include <cmsis-core/core_cm4.h>
+//#include <system_nrf52.h>
+
+void 	NVIC_SetPriority (IRQn_Type IRQn, uint32_t priority);
+uint32_t 	NVIC_GetEnableIRQ (IRQn_Type IRQn);
+void 	NVIC_EnableIRQ (IRQn_Type IRQn);
+void 	NVIC_DisableIRQ (IRQn_Type IRQn);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -50,29 +59,37 @@ extern "C" {
  *
  * @param expression  Expression to evaluate.
  */
-#define NRFX_ASSERT(expression) assert(expression)
+#define NRFX_ASSERT(expression) assert(expression);
+
+//#if MYNEWT_VAL(BASELIBC_ASSERT_FILE_LINE)
+/* #define NRFX_ASSERT(x) ((x) ? (void)0 : \ */
+/*     __assert_func(__FILE__, __LINE__, NULL, NULL)) */
+/* #else */
+/* #define NRFX_ASSERT(x) ((x) ? (void)0 : \ */
+/*     __assert_func(NULL, 0, NULL, NULL)) */
+/* #endif */
 
 /**
  * @brief Macro for placing a compile time assertion.
  *
  * @param expression  Expression to evaluate.
  */
-#define NRFX_STATIC_ASSERT(expression) STATIC_ASSERT(expression)
+#define NRFX_STATIC_ASSERT(expression) STATIC_ASSERT(expression);
 
 
 /**
  * @brief Macro for setting the priority of a specific IRQ.
-  * @param irq_number  IRQ number.
+ * @param irq_number  IRQ number.
  * @param priority    Priority to set.
  */
-#define NRFX_IRQ_PRIORITY_SET(irq_number, priority) NVIC_SetPriority(irq_number, priority)
+#define NRFX_IRQ_PRIORITY_SET(irq_number, priority) NVIC_SetPriority(irq_number, priority);
 
 /**
  * @brief Macro for enabling a specific IRQ.
  *
  * @param irq_number  IRQ number.
  */
-#define NRFX_IRQ_ENABLE(irq_number) NVIC_EnableIRQ(irq_number)
+#define NRFX_IRQ_ENABLE(irq_number) NVIC_EnableIRQ(irq_number);
 
 /**
  * @brief Macro for checking if a specific IRQ is enabled.
@@ -82,14 +99,14 @@ extern "C" {
  * @retval true  If the IRQ is enabled.
  * @retval false Otherwise.
  */
-#define NRFX_IRQ_IS_ENABLED(irq_number) (NVIC_GetEnableIRQ(irq_number) == 1)
+#define NRFX_IRQ_IS_ENABLED(irq_number) (NVIC_GetEnableIRQ(irq_number) == 1);
 
 /**
  * @brief Macro for disabling a specific IRQ.
  *
  * @param irq_number  IRQ number.
  */
-#define NRFX_IRQ_DISABLE(irq_number) NVIC_DisableIRQ(irq_number)
+#define NRFX_IRQ_DISABLE(irq_number) NVIC_DisableIRQ(irq_number);
 
 
 /**
@@ -105,7 +122,7 @@ extern "C" {
 /**
  * @brief Macro for exiting from a critical section.
  */
-#define NRFX_CRITICAL_SECTION_EXIT() OS_EXIT_CRITICAL(sr_from_macro)
+#define NRFX_CRITICAL_SECTION_EXIT() OS_EXIT_CRITICAL(sr_from_macro);
 
 /**
  * @brief When set to a non-zero value, this macro specifies that the

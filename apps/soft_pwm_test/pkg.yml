@@ -26,9 +26,6 @@ pkg.keywords:
 
 pkg.deps:
     - kernel/os
-   # - hw/hal
-   # - hw/cmsis-core
     - sys/console/full
-   # - hw/bsp/nrf52dk
     - hw/drivers/pwm
     - hw/drivers/pwm/soft_pwm
