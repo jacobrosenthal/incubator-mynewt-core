@@ -28,9 +28,6 @@ pkg.type: sdk
 
 pkg.ign_files.BSP_NRF52:
     - "nrfx_adc.c"
-    - "pstorage*"
-    - "sdk_mapped_flags.c"
-    - "nrfx_adc.c"
     - "nrfx_clock.c"
     - "nrfx_comp.c"
     - "nrfx_gpiote.c"
@@ -44,7 +41,6 @@ pkg.ign_files.BSP_NRF52:
     - "nrfx_qspi.c"
     - "nrfx_rng.c"
     - "nrfx_rtc.c"
-    - "nrfx_saadc.c" #Take this off for nrf52_adc
     - "nrfx_spi.c"
     - "nrfx_spim.c"
     - "nrfx_spis.c"
@@ -59,8 +55,6 @@ pkg.ign_files.BSP_NRF52:
     - "nrfx_wdt.c"
 
 pkg.ign_files.BSP_NRF51:
-    - "pstorage*"
-    - "sdk_mapped_flags.c"
     - "nrfx_adc.c"
     - "nrfx_clock.c"
     - "nrfx_comp.c"
@@ -91,13 +85,11 @@ pkg.ign_files.BSP_NRF51:
     - "nrfx_wdt.c"
 
 pkg.ign_dirs:
-    - "deprecated"
     - "doc"
     - "templates"
     - "mdk"
 
 pkg.src_dirs:
-#    - "src/ext/nRF5_SDK_11.0.0_89a8197/components/device/"
     - "src/ext/nrfx/"
 
 pkg.cflags: -std=gnu99 -DNRF52_PAN_28

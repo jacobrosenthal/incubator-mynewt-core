@@ -33,13 +33,7 @@
 #define NRFX_GLUE_H__
 
 #include <assert.h>
-//#include <cmsis-core/core_cm4.h>
-//#include <system_nrf52.h>
-
-void 	NVIC_SetPriority (IRQn_Type IRQn, uint32_t priority);
-uint32_t 	NVIC_GetEnableIRQ (IRQn_Type IRQn);
-void 	NVIC_EnableIRQ (IRQn_Type IRQn);
-void 	NVIC_DisableIRQ (IRQn_Type IRQn);
+#include <os/os.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,21 +55,12 @@ extern "C" {
  */
 #define NRFX_ASSERT(expression) assert(expression);
 
-//#if MYNEWT_VAL(BASELIBC_ASSERT_FILE_LINE)
-/* #define NRFX_ASSERT(x) ((x) ? (void)0 : \ */
-/*     __assert_func(__FILE__, __LINE__, NULL, NULL)) */
-/* #else */
-/* #define NRFX_ASSERT(x) ((x) ? (void)0 : \ */
-/*     __assert_func(NULL, 0, NULL, NULL)) */
-/* #endif */
-
 /**
  * @brief Macro for placing a compile time assertion.
  *
  * @param expression  Expression to evaluate.
  */
 #define NRFX_STATIC_ASSERT(expression) STATIC_ASSERT(expression);
-
 
 /**
  * @brief Macro for setting the priority of a specific IRQ.
@@ -112,12 +97,9 @@ extern "C" {
 /**
  * @brief Macro for entering into a critical section.
  */
+os_sr_t sr_from_macro;
 
-/* TODO: Discuss and fix this, consider multiple CRs withing the same scope. */
-#define NRFX_CRITICAL_SECTION_ENTER() {         \
-        os_sr_t sr_from_macro;                  \
-        OS_ENTER_CRITICAL(sr_from_macro);       \
-}
+#define NRFX_CRITICAL_SECTION_ENTER() OS_ENTER_CRITICAL(sr_from_macro);
 
 /**
  * @brief Macro for exiting from a critical section.
