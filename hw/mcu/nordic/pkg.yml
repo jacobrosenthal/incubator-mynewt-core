@@ -55,7 +55,6 @@ pkg.ign_files.BSP_NRF52:
     - "nrfx_wdt.c"
 
 pkg.ign_files.BSP_NRF51:
-    - "nrfx_adc.c"
     - "nrfx_clock.c"
     - "nrfx_comp.c"
     - "nrfx_gpiote.c"

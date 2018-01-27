@@ -70,7 +70,7 @@ syscfg.defs:
 
     ADC_0:
         description: 'NRF52 ADC 0'
-        value:  10
+        value:  0
 
     ADC_0_RESOLUTION:
         description: 'NRF52 ADC 0 RESOLUTION'
