@@ -31,12 +31,6 @@
 
 #include "adc_nrf52/adc_nrf52.h"
 
-/**
- * Weak symbol, this is defined in Nordic drivers but not exported.
- * Needed for NVIC_SetVector().
- */
-extern void SAADC_IRQHandler(void);
-
 struct nrf52_saadc_stats {
     uint16_t saadc_events;
     uint16_t saadc_events_failed;
@@ -395,7 +389,7 @@ nrf52_adc_dev_init(struct os_dev *odev, void *arg)
     af->af_read_buffer = nrf52_adc_read_buffer;
     af->af_size_buffer = nrf52_adc_size_buffer;
 
-    NVIC_SetVector(SAADC_IRQn, (uint32_t) SAADC_IRQHandler);
+    NVIC_SetVector(SAADC_IRQn, (uint32_t) nrfx_saadc_irq_handler);
 
     return (0);
 }

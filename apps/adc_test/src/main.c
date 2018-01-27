@@ -21,6 +21,7 @@
 #include <os/os.h>
 #include <bsp/bsp.h>
 #include <adc/adc.h>
+#include <console/console.h>
 
 #include <string.h>
 
@@ -30,11 +31,11 @@
 #define ADC_NUMBER_SAMPLES (2)
 #define ADC_NUMBER_CHANNELS (1)
 
-/* ADC Task settings */
-#define ADC_TASK_PRIO           (OS_STACK_PRI_HIGHEST)
-#define ADC_STACK_SIZE          (OS_STACK_ALIGN(336))
+nrfx_saadc_config_t adc_config = NRFX_SAADC_DEFAULT_CONFIG;
 
-struct os_eventq adc_evq;
+/* ADC Task settings */
+#define ADC_TASK_PRIO           (0)
+#define ADC_STACK_SIZE          (OS_STACK_ALIGN(336))
 struct os_task adc_task;
 os_stack_t adc_stack[ADC_STACK_SIZE];
 
@@ -66,9 +67,9 @@ void
 adc_init()
 {
     nrf_saadc_channel_config_t cc = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(3);
-    adc = (struct adc_dev *) os_dev_open("adc0", 0, NULL);
+    adc = (struct adc_dev *) os_dev_open("adc0", 0, &adc_config);
     assert(adc != NULL);
-    adc_chan_config(adc, 3, NULL);
+    adc_chan_config(adc, 0, &cc);
     sample_buffer1 = malloc(adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
     sample_buffer2 = malloc(adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
     memset(sample_buffer1, 0, adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
@@ -82,8 +83,7 @@ adc_read_event(struct adc_dev *dev, void *arg, uint8_t etype,
         void *buffer, int buffer_len)
 {
     int value;
-    uint16_t chr_val_handle;
-    int rc;
+    int rc = 0xFFFFFFFF;
 
     value = adc_read(buffer, buffer_len);
     if (value >= 0) {
@@ -92,10 +92,6 @@ adc_read_event(struct adc_dev *dev, void *arg, uint8_t etype,
         console_printf("Error while reading: %d\n", value);
         goto err;
     }
-    gatt_adc_val = value;
-    rc = ble_gatts_find_chr(&gatt_svr_svc_adc_uuid.u, BLE_UUID16_DECLARE(ADC_SNS_VAL), NULL, &chr_val_handle);
-    assert(rc == 0);
-    ble_gatts_chr_updated(chr_val_handle);
     return (0);
 err:
     return (rc);
@@ -107,7 +103,6 @@ err:
 static void
 adc_task_handler(void *unused)
 {
-    struct adc_dev *adc;
     int rc;
     /* ADC init */
     adc_init();
@@ -125,6 +120,15 @@ int
 main(int argc, char **argv)
 {
     sysinit();
+
+    os_task_init(&adc_task,
+                 "sensor",
+                 adc_task_handler,
+                 NULL,
+                 ADC_TASK_PRIO,
+                 OS_WAIT_FOREVER,
+                 adc_stack,
+                 ADC_STACK_SIZE);
 
     while (1) {
         os_eventq_run(os_eventq_dflt_get());
