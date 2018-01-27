@@ -19,8 +19,13 @@
 #include "syscfg/syscfg.h"
 #include "sysinit/sysinit.h"
 #include <os/os.h>
-#include <adc/adc.h>
 #include <bsp/bsp.h>
+#include <adc/adc.h>
+
+#include <string.h>
+
+#include <nrf_saadc.h>
+#include <nrfx_saadc.h>
 
 #define ADC_NUMBER_SAMPLES (2)
 #define ADC_NUMBER_CHANNELS (1)
@@ -60,16 +65,40 @@ err:
 void
 adc_init()
 {
-    nrf_saadc_channel_config_t cc;
-    cc = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRFX_SAADC_INPUT_AIN1);
+    nrf_saadc_channel_config_t cc = NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(3);
     adc = (struct adc_dev *) os_dev_open("adc0", 0, NULL);
     assert(adc != NULL);
+    adc_chan_config(adc, 3, NULL);
     sample_buffer1 = malloc(adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
     sample_buffer2 = malloc(adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
     memset(sample_buffer1, 0, adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
     memset(sample_buffer2, 0, adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
     adc_buf_set(adc, sample_buffer1, sample_buffer2,
                 adc_buf_size(adc, ADC_NUMBER_CHANNELS, ADC_NUMBER_SAMPLES));
+}
+
+int
+adc_read_event(struct adc_dev *dev, void *arg, uint8_t etype,
+        void *buffer, int buffer_len)
+{
+    int value;
+    uint16_t chr_val_handle;
+    int rc;
+
+    value = adc_read(buffer, buffer_len);
+    if (value >= 0) {
+        console_printf("Got %d\n", value);
+    } else {
+        console_printf("Error while reading: %d\n", value);
+        goto err;
+    }
+    gatt_adc_val = value;
+    rc = ble_gatts_find_chr(&gatt_svr_svc_adc_uuid.u, BLE_UUID16_DECLARE(ADC_SNS_VAL), NULL, &chr_val_handle);
+    assert(rc == 0);
+    ble_gatts_chr_updated(chr_val_handle);
+    return (0);
+err:
+    return (rc);
 }
 
 /**
@@ -81,7 +110,7 @@ adc_task_handler(void *unused)
     struct adc_dev *adc;
     int rc;
     /* ADC init */
-    adc = adc_init();
+    adc_init();
     rc = adc_event_handler_set(adc, adc_read_event, (void *) NULL);
     assert(rc == 0);
 
@@ -96,7 +125,6 @@ int
 main(int argc, char **argv)
 {
     sysinit();
-    adc_chan_config(adc, 0, &cc);
 
     while (1) {
         os_eventq_run(os_eventq_dflt_get());
