@@ -36,8 +36,12 @@ main(int argc, char **argv)
     uint32_t base_freq;
 
     sysinit();
-
+    
+#if MYNEWT_VAL(SOFT_PWM)
+    pwm = (struct pwm_dev *) os_dev_open("spwm", 0, NULL);
+#else
     pwm = (struct pwm_dev *) os_dev_open("pwm0", 0, NULL);
+#endif
 
     /* set the PWM frequency */
     pwm_set_frequency(pwm, 10000);
