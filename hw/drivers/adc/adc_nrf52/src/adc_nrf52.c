@@ -112,7 +112,7 @@ nrf52_adc_open(struct os_dev *odev, uint32_t wait, void *arg)
     /* Initialize the device */
     rc = nrfx_saadc_init((nrfx_saadc_config_t *) arg,
             nrf52_saadc_event_handler);
-    if (rc != 0) {
+    if (rc != NRFX_SUCCESS) {
         goto err;
     }
 
@@ -173,7 +173,7 @@ nrf52_adc_configure_channel(struct adc_dev *dev, uint8_t cnum,
     cc = (nrf_saadc_channel_config_t *) cfgdata;
 
     rc = nrfx_saadc_channel_init(cnum, cc);
-    if (rc != 0) {
+    if (rc != NRFX_SUCCESS) {
         goto err;
     }
 
@@ -268,14 +268,14 @@ nrf52_adc_set_buffer(struct adc_dev *dev, void *buf1, void *buf2,
     buf_len /= sizeof(nrf_saadc_value_t);
 
     rc = nrfx_saadc_buffer_convert((nrf_saadc_value_t *) buf1, buf_len);
-    if (rc != 0) {
+    if (rc != NRFX_SUCCESS) {
         goto err;
     }
 
     if (buf2) {
         rc = nrfx_saadc_buffer_convert((nrf_saadc_value_t *) buf2,
                 buf_len);
-        if (rc != 0) {
+        if (rc != NRFX_SUCCESS) {
             goto err;
         }
     }
@@ -292,7 +292,7 @@ nrf52_adc_release_buffer(struct adc_dev *dev, void *buf, int buf_len)
     buf_len /= sizeof(nrf_saadc_value_t);
 
     rc = nrfx_saadc_buffer_convert((nrf_saadc_value_t *) buf, buf_len);
-    if (rc != 0) {
+    if (rc != NRFX_SUCCESS) {
         goto err;
     }
 
@@ -322,7 +322,7 @@ nrf52_adc_read_channel(struct adc_dev *dev, uint8_t cnum, int *result)
     int rc;
 
     rc = nrfx_saadc_sample_convert(cnum, &adc_value);
-    if (rc != 0) {
+    if (rc != NRFX_SUCCESS) {
         goto err;
     }
 
