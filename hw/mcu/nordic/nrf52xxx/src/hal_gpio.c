@@ -168,9 +168,11 @@ int
 hal_gpio_read(int pin)
 {
     NRF_GPIO_Type *port;
-
     port = HAL_GPIO_PORT(pin);
-    return ((port->IN & HAL_GPIO_MASK(pin)) != 0);
+
+    return (port->PIN_CNF[pin] == GPIO_PIN_CNF_DIR_Output) ?
+         ((port->OUT & HAL_GPIO_MASK(pin))) :
+         ((port->IN & HAL_GPIO_MASK(pin)));
 }
 
 /**
