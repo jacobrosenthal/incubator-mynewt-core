@@ -47,7 +47,7 @@
  *  number is used unexpected and/or erroneous behavior will result.
  */
 #ifdef NRF52
-#define HAL_GPIO_INDEX(pin)
+#define HAL_GPIO_INDEX(pin)     (pin)
 #define HAL_GPIO_PORT(pin)      (NRF_P0)
 #define HAL_GPIO_MASK(pin)      (1 << pin)
 #define HAL_GPIOTE_PIN_MASK     GPIOTE_CONFIG_PSEL_Msk
