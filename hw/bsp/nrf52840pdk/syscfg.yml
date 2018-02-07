@@ -84,14 +84,6 @@ syscfg.defs:
         description: 'NRF52 ADC IRQ PRIORITY'
         value: 'NRFX_SAADC_CONFIG_IRQ_PRIORITY'
 
-    ADC:
-        description: 'NRF52 ADC'
-        value: 0
-
-    PWM:
-        description: 'NRF52 PWM'
-        value: 0
-
     PWM_0:
         description: 'NRF52 PWM 0'
         value: 0

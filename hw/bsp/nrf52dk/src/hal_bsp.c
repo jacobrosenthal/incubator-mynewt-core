@@ -43,11 +43,11 @@
 #endif
 #include "os/os_dev.h"
 #include "bsp.h"
-#if MYNEWT_VAL(ADC)
+#if MYNEWT_VAL(ADC_0)
 #include <adc_nrf52/adc_nrf52.h>
 #include <nrfx_saadc.h>
 #endif
-#if MYNEWT_VAL(PWM)
+#if MYNEWT_VAL(PWM_0) || MYNEWT_VAL(PWM_1) || MYNEWT_VAL(PWM_2)
 #include <pwm_nrf52/pwm_nrf52.h>
 #endif
 #if MYNEWT_VAL(SOFT_PWM)
