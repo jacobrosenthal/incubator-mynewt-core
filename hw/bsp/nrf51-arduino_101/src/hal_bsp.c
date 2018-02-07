@@ -36,6 +36,11 @@
 #include "uart/uart.h"
 #include "uart_hal/uart_hal.h"
 
+#if MYNEWT_VAL(ADC_0)
+#include <adc_nrf51/adc_nrf51.h>
+#include <nrfx_adc.h>
+#endif
+
 #if MYNEWT_VAL(UART_0)
 static struct uart_dev os_bsp_uart0;
 static const struct nrf51_uart_cfg os_bsp_uart0_cfg = {
@@ -64,6 +69,16 @@ static const struct nrf51_hal_spi_cfg os_bsp_spi1s_cfg = {
     .mosi_pin     = 25,
     .miso_pin     = 28,
     .ss_pin       = 24
+};
+#endif
+
+#if MYNEWT_VAL(ADC_0)
+static struct adc_dev os_bsp_adc0;
+static nrfx_adc_channel_config_t os_bsp_adc0_config = {
+    .resolution = MYNEWT_VAL(ADC_0_RESOLUTION),
+    .input      = MYNEWT_VAL(ADC_0_SCALING),
+    .reference  = MYNEWT_VAL(ADC_0_REFERENCE),
+    .ain        = MYNEWT_VAL(ADC_0_PIN)
 };
 #endif
 
@@ -134,6 +149,15 @@ hal_bsp_init(void)
 
     /* Make sure system clocks have started */
     hal_system_clock_start();
+
+#if MYNEWT_VAL(ADC_0)
+    rc = os_dev_create((struct os_dev *) &os_bsp_adc0, "adc0",
+      OS_DEV_INIT_KERNEL,
+      OS_DEV_INIT_PRIO_DEFAULT,
+      nrf51_adc_dev_init,
+      &os_bsp_adc0_config);
+    assert(rc == 0);
+#endif
 
 #if MYNEWT_VAL(UART_0)
     rc = os_dev_create((struct os_dev *) &os_bsp_uart0, "uart0",

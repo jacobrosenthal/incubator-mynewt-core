@@ -40,6 +40,19 @@ syscfg.defs:
         description: 'CTS pin for UART0'
         value: 0
 
+    ADC_0_RESOLUTION:
+        description: ''
+        value: NRF_ADC_CONFIG_RES_10BIT
+    ADC_0_SCALING:
+        description: ''
+        value: NRF_ADC_CONFIG_SCALING_INPUT_FULL_SCALE
+    ADC_0_REFERENCE:
+        description: ''
+        value: NRF_ADC_CONFIG_REF_VBG
+    ADC_0_PIN:
+        description: ''
+        value: 3
+
     TIMER_0:
         description: 'NRF51 Timer 0'
         value:  1
