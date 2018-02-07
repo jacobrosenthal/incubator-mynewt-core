@@ -89,12 +89,12 @@ typedef struct
 
 /**@brief Macro for initializing the ADC channel with the default configuration. */
 #define NRFX_ADC_DEFAULT_CHANNEL(analog_input)             \
- {{{                                                       \
+ {                                                         \
     .resolution = NRF_ADC_CONFIG_RES_10BIT,                \
     .input      = NRF_ADC_CONFIG_SCALING_INPUT_FULL_SCALE, \
     .reference  = NRF_ADC_CONFIG_REF_VBG,                  \
     .ain        = (analog_input)                           \
- }}, NULL}
+ }
 
 /**
  * @brief ADC channel configuration.
