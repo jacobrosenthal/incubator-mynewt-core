@@ -90,7 +90,7 @@ nrf51_adc_event_handler(const nrfx_adc_evt_t *event)
  *             if resource unavailable.  If OS_WAIT_FOREVER specified, blocks
  *             until resource is available.
  * @param arg  Argument provided by higher layer to open, in this case
- *             it can be a nrfx_adc_config_t, to override the default
+ *             it must be a nrfx_adc_config_t
  *             configuration.
  *
  * @return 0 on success, non-zero on failure.
@@ -101,6 +101,11 @@ nrf51_adc_open(struct os_dev *odev, uint32_t wait, void *arg)
     struct adc_dev *dev;
     nrfx_adc_config_t *cfg;
     int rc;
+
+    if (arg == NULL) {
+        rc = OS_EINVAL;
+        goto err;
+    }
 
     dev = (struct adc_dev *) odev;
 
@@ -167,33 +172,30 @@ static int
 nrf51_adc_configure_channel(struct adc_dev *dev, uint8_t cnum,
                             void *cfgdata)
 {
-    nrfx_adc_channel_t *cc;
+    int rc;
     nrfx_adc_channel_config_t *cc_cfg;
-    nrf_adc_config_t adc_cfg;
+    int reference;
     uint16_t refmv;
     uint8_t res;
-    int rc;
 
-    rc = -1;
     if (global_adc_config == NULL) {
+        rc = OS_ERROR;
         goto err;
     }
 
-    cc = (nrfx_adc_channel_t *)cfgdata;
-    nrf_adc_chan = cc;
-    cc_cfg = &cc->config.config;
+    //store nrf_adc_chan for nrf51_adc_read_channel
+    nrf_adc_chan = cfgdata;
 
-    adc_cfg.reference = cc_cfg->reference |
-        (cc_cfg->external_reference << ADC_CONFIG_EXTREFSEL_Pos);
-    adc_cfg.resolution = cc_cfg->resolution;
-    adc_cfg.scaling = cc_cfg->input;
-    nrf_adc_configure(&adc_cfg);
-    nrfx_adc_channel_enable(cc);
+    nrfx_adc_channel_enable(nrf_adc_chan);
+
+    // they play shenanigans storing the reference bit fields so we have to as well
+    cc_cfg = &nrf_adc_chan->config.config;
+    reference = cc_cfg->reference | (cc_cfg->external_reference << ADC_CONFIG_EXTREFSEL_Pos);
 
     /* Set the resolution and reference voltage for this channel to
     * enable conversion functions.
     */
-    switch (adc_cfg.resolution) {
+    switch (cc_cfg->resolution) {
         case NRF_ADC_CONFIG_RES_8BIT:
             res = 8;
             break;
@@ -207,7 +209,7 @@ nrf51_adc_configure_channel(struct adc_dev *dev, uint8_t cnum,
             assert(0);
     }
 
-    switch (adc_cfg.reference) {
+    switch (reference) {
         case NRF_ADC_CONFIG_REF_VBG:
             refmv = 1200; /* 1.2V for NRF51 */
             break;
@@ -253,6 +255,7 @@ nrf51_adc_configure_channel(struct adc_dev *dev, uint8_t cnum,
     dev->ad_chans[cnum].c_res = res;
     dev->ad_chans[cnum].c_refmv = refmv;
     dev->ad_chans[cnum].c_configured = 1;
+    dev->ad_chans[cnum].c_cnum = cnum;
 
     return (0);
 err:
@@ -269,7 +272,10 @@ nrf51_adc_set_buffer(struct adc_dev *dev, void *buf1, void *buf2,
 {
     int rc;
 
-    /* XXX: If this is called in blocking mode, it will result in a wait. */
+    if (dev == NULL || buf1 == NULL) {
+        rc = OS_EINVAL;
+        goto err;
+    }
 
     /* Convert overall buffer length, into a total number of samples which
      * Nordic APIs expect.
@@ -281,21 +287,12 @@ nrf51_adc_set_buffer(struct adc_dev *dev, void *buf1, void *buf2,
         goto err;
     }
 
-    /* XXX: For now, only support one buffer */
-#if 0
-    if (buf2) {
-        rc = nrfx_adc_buffer_convert((nrf_adc_value_t *) buf2,
-                buf_len);
-        if (rc != NRFX_SUCCESS) {
-            goto err;
-        }
-    }
-#endif
     return (0);
 err:
     return (rc);
 }
 
+//WHY DOES THIS EXIST! why doesnt it work without it!
 static int
 nrf51_adc_release_buffer(struct adc_dev *dev, void *buf, int buf_len)
 {
@@ -326,6 +323,8 @@ nrf51_adc_sample(struct adc_dev *dev)
 
 /**
  * Blocking read of an ADC channel, returns result as an integer.
+ * It is technically not necessary to have actually adc_chan_config (or even nrf51_adc_dev_init)
+ * However there is no way to pass the nrfx_adc_channel_t argument through this function
  */
 static int
 nrf51_adc_read_channel(struct adc_dev *dev, uint8_t cnum, int *result)
@@ -334,10 +333,16 @@ nrf51_adc_read_channel(struct adc_dev *dev, uint8_t cnum, int *result)
     int rc;
 
     rc = nrfx_adc_sample_convert(nrf_adc_chan, &adc_value);
-    if (rc == NRFX_SUCCESS) {
-        *result = (int) adc_value;
+    if (rc != NRFX_SUCCESS) {
+        rc = OS_EBUSY;
+        goto err;
     }
-    return (rc);
+
+    *result = (int) adc_value;
+
+    return 0;
+err:
+    return rc;
 }
 
 static int

@@ -88,11 +88,10 @@ static const struct nrf51_hal_i2c_cfg hal_i2c1_cfg = {
 
 #if MYNEWT_VAL(ADC_0)
 static struct adc_dev os_bsp_adc0;
-static nrfx_adc_channel_config_t os_bsp_adc0_config = {
-    .resolution = MYNEWT_VAL(ADC_0_RESOLUTION),
-    .input      = MYNEWT_VAL(ADC_0_SCALING),
-    .reference  = MYNEWT_VAL(ADC_0_REFERENCE),
-    .ain        = MYNEWT_VAL(ADC_0_PIN)
+static struct nrf51_adc_dev_cfg os_bsp_adc0_config = {
+    .nadc_refmv0    = MYNEWT_VAL(ADC_0_REFMV_0),
+    .nadc_refmv1    = MYNEWT_VAL(ADC_0_REFMV_1),
+    .nadc_refmv_vdd = MYNEWT_VAL(ADC_0_REFMV_VDD)
 };
 #endif
 
