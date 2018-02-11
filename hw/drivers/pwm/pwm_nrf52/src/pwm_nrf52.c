@@ -43,14 +43,14 @@ struct nrf52_pwm_dev_global {
 
 static struct nrf52_pwm_dev_global instances[] =
 {
-#if (PWM0_ENABLED == 1)
+#if (NRFX_PWM0_ENABLED == 1)
     [0].in_use = false,
     [0].playing = false,
     [0].drv_instance = NRFX_PWM_INSTANCE(0),
     [0].config = NRFX_PWM_DEFAULT_CONFIG,
     [0].duty_cycles = {0}
 #endif
-#if (PWM1_ENABLED == 1)
+#if (NRFX_PWM1_ENABLED == 1)
     ,
     [1].in_use = false,
     [1].playing = false,
@@ -58,7 +58,7 @@ static struct nrf52_pwm_dev_global instances[] =
     [1].config = NRFX_DRV_PWM_DEFAULT_CONFIG(1),
     [1].duty_cycles = {0}
 #endif
-#if (PWM2_ENABLED == 1)
+#if (NRFX_PWM2_ENABLED == 1)
     ,
     [2].in_use = false,
     [2].playing = false,

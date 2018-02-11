@@ -34,9 +34,10 @@ main(int argc, char **argv)
         .data = NULL
     };
     uint32_t base_freq;
+    int rc;
 
     sysinit();
-    
+
 #if MYNEWT_VAL(SOFT_PWM)
     pwm = (struct pwm_dev *) os_dev_open("spwm", 0, NULL);
 #else
@@ -49,23 +50,35 @@ main(int argc, char **argv)
     max_val = (uint16_t) (base_freq / 10000);
 
     /* setup led 1 - 100% duty cycle*/
-    pwm_chan_config(pwm, 0, &chan_conf);
-    pwm_enable_duty_cycle(pwm, 0, max_val);
+    rc = pwm_chan_config(pwm, 0, &chan_conf);
+    assert(rc == 0);
+
+    rc = pwm_enable_duty_cycle(pwm, 0, max_val);
+    assert(rc == 0);
 
     /* setup led 2 - 50% duty cycle */
     chan_conf.pin = LED_2;
-    pwm_chan_config(pwm, 1, &chan_conf);
-    pwm_enable_duty_cycle(pwm, 1, max_val/2);
+    rc = pwm_chan_config(pwm, 1, &chan_conf);
+    assert(rc == 0);
+
+    rc = pwm_enable_duty_cycle(pwm, 1, max_val/2);
+    assert(rc == 0);
 
     /* setup led 3 - 25% duty cycle */
     chan_conf.pin = LED_3;
-    pwm_chan_config(pwm, 2, &chan_conf);
-    pwm_enable_duty_cycle(pwm, 2, max_val/4);
+    rc = pwm_chan_config(pwm, 2, &chan_conf);
+    assert(rc == 0);
+
+    rc = pwm_enable_duty_cycle(pwm, 2, max_val/4);
+    assert(rc == 0);
 
     /* setup led 4 - 10% duty cycle */
     chan_conf.pin = LED_4;
-    pwm_chan_config(pwm, 3, &chan_conf);
-    pwm_enable_duty_cycle(pwm, 3, max_val/10);
+    rc = pwm_chan_config(pwm, 3, &chan_conf);
+    assert(rc == 0);
+
+    rc = pwm_enable_duty_cycle(pwm, 3, max_val/10);
+    assert(rc == 0);
 
     while (1) {
         os_eventq_run(os_eventq_dflt_get());
