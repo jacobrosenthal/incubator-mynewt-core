@@ -56,29 +56,33 @@ main(int argc, char **argv)
     rc = pwm_enable_duty_cycle(pwm, 0, max_val);
     assert(rc == 0);
 
-    /* /\* setup led 2 - 50% duty cycle *\/ */
-    /* chan_conf.pin = LED_2; */
-    /* rc = pwm_chan_config(pwm, 1, &chan_conf); */
-    /* assert(rc == 0); */
+#ifdef LED_2
+    /* setup led 2 - 50% duty cycle */
+    chan_conf.pin = LED_2;
+    rc = pwm_chan_config(pwm, 1, &chan_conf);
+    assert(rc == 0);
 
-    /* rc = pwm_enable_duty_cycle(pwm, 1, max_val/2); */
-    /* assert(rc == 0); */
+    rc = pwm_enable_duty_cycle(pwm, 1, max_val/2);
+    assert(rc == 0);
+#endif
+#ifdef LED_3
+    /* setup led 3 - 25% duty cycle */
+    chan_conf.pin = LED_3;
+    rc = pwm_chan_config(pwm, 2, &chan_conf);
+    assert(rc == 0);
 
-    /* /\* setup led 3 - 25% duty cycle *\/ */
-    /* chan_conf.pin = LED_3; */
-    /* rc = pwm_chan_config(pwm, 2, &chan_conf); */
-    /* assert(rc == 0); */
+    rc = pwm_enable_duty_cycle(pwm, 2, max_val/4);
+    assert(rc == 0);
+#endif
+#ifdef LED_4
+    /* setup led 4 - 10% duty cycle */
+    chan_conf.pin = LED_4;
+    rc = pwm_chan_config(pwm, 3, &chan_conf);
+    assert(rc == 0);
 
-    /* rc = pwm_enable_duty_cycle(pwm, 2, max_val/4); */
-    /* assert(rc == 0); */
-
-    /* /\* setup led 4 - 10% duty cycle *\/ */
-    /* chan_conf.pin = LED_4; */
-    /* rc = pwm_chan_config(pwm, 3, &chan_conf); */
-    /* assert(rc == 0); */
-
-    /* rc = pwm_enable_duty_cycle(pwm, 3, max_val/10); */
-    /* assert(rc == 0); */
+    rc = pwm_enable_duty_cycle(pwm, 3, max_val/10);
+    assert(rc == 0);
+#endif
 
     while (1) {
         os_eventq_run(os_eventq_dflt_get());
