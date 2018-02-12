@@ -224,7 +224,8 @@ hal_bsp_init(void)
 #endif
 
 #if MYNEWT_VAL(ADC_0)
-rc = os_dev_create((struct os_dev *) &os_bsp_adc0, "adc0",
+rc = os_dev_create((struct os_dev *) &os_bsp_adc0,
+                   "adc0",
                    OS_DEV_INIT_KERNEL,
                    OS_DEV_INIT_PRIO_DEFAULT,
                    nrf52_adc_dev_init,
