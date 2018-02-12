@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <pwm/pwm.h>
 #include <string.h>
+#include <bsp/cmsis_nvic.h>
 
 /* Nordic headers */
 #include <nrfx.h>
@@ -43,28 +44,36 @@ struct nrf52_pwm_dev_global {
 
 static struct nrf52_pwm_dev_global instances[] =
 {
-#if (NRFX_PWM0_ENABLED == 1)
+#if MYNEWT_VAL(PWM_0)
     [0].in_use = false,
     [0].playing = false,
     [0].drv_instance = NRFX_PWM_INSTANCE(0),
     [0].config = NRFX_PWM_DEFAULT_CONFIG,
     [0].duty_cycles = {0}
 #endif
-#if (NRFX_PWM1_ENABLED == 1)
+#if MYNEWT_VAL(PWM_1)
     ,
     [1].in_use = false,
     [1].playing = false,
-    [1].drv_instance = NRFX_DRV_PWM_INSTANCE(1),
-    [1].config = NRFX_DRV_PWM_DEFAULT_CONFIG(1),
+    [1].drv_instance = NRFX_PWM_INSTANCE(1),
+    [1].config = NRFX_PWM_DEFAULT_CONFIG,
     [1].duty_cycles = {0}
 #endif
-#if (NRFX_PWM2_ENABLED == 1)
+#if MYNEWT_VAL(PWM_2)
     ,
     [2].in_use = false,
     [2].playing = false,
-    [2].drv_instance = NRFX_DRV_PWM_INSTANCE(2),
-    [2].config = NRFX_DRV_PWM_DEFAULT_CONFIG(2),
+    [2].drv_instance = NRFX_PWM_INSTANCE(2),
+    [2].config = NRFX_PWM_DEFAULT_CONFIG,
     [2].duty_cycles = {0}
+#endif
+#if MYNEWT_VAL(PWM_3)
+    ,
+    [3].in_use = false,
+    [3].playing = false,
+    [3].drv_instance = NRFX_PWM_INSTANCE(3),
+    [3].config = NRFX_PWM_DEFAULT_CONFIG,
+    [3].duty_cycles = {0}
 #endif
 };
 
@@ -205,7 +214,7 @@ play_current_config(struct nrf52_pwm_dev_global *instance)
             .end_delay           = 0
         };
 
-    nrfx_pwm_simple_playback(&instances->drv_instance,
+    nrfx_pwm_simple_playback(&instance->drv_instance,
                              &seq,
                              1,
                              NRFX_PWM_FLAG_LOOP);
@@ -468,17 +477,8 @@ nrf52_pwm_dev_init(struct os_dev *odev, void *arg)
 
     dev = (struct pwm_dev *) odev;
 
-    if (arg) {
-        dev->pwm_instance_id = *((int*) arg);
-    } else {
-        dev->pwm_instance_id = 0;
-        while (dev->pwm_instance_id < PWM_COUNT) {
-            if (!instances[dev->pwm_instance_id].in_use) {
-                break;
-            }
-            dev->pwm_instance_id++;
-        }
-    }
+    assert(arg != NULL);
+    dev->pwm_instance_id = *((int*) arg);
     instances[dev->pwm_instance_id].in_use = true;
 
     dev->pwm_chan_count = NRF_PWM_CHANNEL_COUNT;

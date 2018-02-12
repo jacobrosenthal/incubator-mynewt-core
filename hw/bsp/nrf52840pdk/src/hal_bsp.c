@@ -40,7 +40,10 @@
 #include <adc_nrf52/adc_nrf52.h>
 #include <nrfx_saadc.h>
 #endif
-#if MYNEWT_VAL(PWM_0) || MYNEWT_VAL(PWM_1) || MYNEWT_VAL(PWM_2)
+#if MYNEWT_VAL(PWM_0) || \
+    MYNEWT_VAL(PWM_1) || \
+    MYNEWT_VAL(PWM_2) || \
+    MYNEWT_VAL(PWM_3)
 #include <pwm_nrf52/pwm_nrf52.h>
 #endif
 #if MYNEWT_VAL(SOFT_PWM)
@@ -98,12 +101,19 @@ static nrfx_saadc_config_t os_bsp_adc0_config = {
 
 #if MYNEWT_VAL(PWM_0)
 static struct pwm_dev os_bsp_pwm0;
+int pwm0_idx;
 #endif
 #if MYNEWT_VAL(PWM_1)
 static struct pwm_dev os_bsp_pwm1;
+int pwm1_idx;
 #endif
 #if MYNEWT_VAL(PWM_2)
 static struct pwm_dev os_bsp_pwm2;
+int pwm2_idx;
+#endif
+#if MYNEWT_VAL(PWM_3)
+static struct pwm_dev os_bsp_pwm2;
+int pwm3_idx;
 #endif
 #if MYNEWT_VAL(SOFT_PWM)
 static struct pwm_dev os_bsp_spwm;
@@ -220,30 +230,43 @@ assert(rc == 0);
 #endif
 
 #if MYNEWT_VAL(PWM_0)
+    pwm0_idx = 0;
     rc = os_dev_create((struct os_dev *) &os_bsp_pwm0,
                        "pwm0",
                        OS_DEV_INIT_KERNEL,
                        OS_DEV_INIT_PRIO_DEFAULT,
                        nrf52_pwm_dev_init,
-                       NULL);
+                       &pwm0_idx);
     assert(rc == 0);
 #endif
 #if MYNEWT_VAL(PWM_1)
+    pwm1_idx = 1;
     rc = os_dev_create((struct os_dev *) &os_bsp_pwm1,
                        "pwm1",
                        OS_DEV_INIT_KERNEL,
                        OS_DEV_INIT_PRIO_DEFAULT,
                        nrf52_pwm_dev_init,
-                       NULL);
+                       &pwm1_idx);
     assert(rc == 0);
 #endif
 #if MYNEWT_VAL(PWM_2)
+    pwm2_idx = 2;
     rc = os_dev_create((struct os_dev *) &os_bsp_pwm2,
                        "pwm2",
                        OS_DEV_INIT_KERNEL,
                        OS_DEV_INIT_PRIO_DEFAULT,
                        nrf52_pwm_dev_init,
-                       NULL);
+                       &pwm2_idx);
+    assert(rc == 0);
+#endif
+#if MYNEWT_VAL(PWM_3)
+    pwm3_idx = 3;
+    rc = os_dev_create((struct os_dev *) &os_bsp_pwm3,
+                       "pwm2",
+                       OS_DEV_INIT_KERNEL,
+                       OS_DEV_INIT_PRIO_DEFAULT,
+                       nrf52_pwm_dev_init,
+                       &pwm3_idx);
     assert(rc == 0);
 #endif
 #if MYNEWT_VAL(SOFT_PWM)
