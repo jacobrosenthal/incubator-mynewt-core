@@ -119,7 +119,6 @@ int pwm2_idx;
 static struct pwm_dev os_bsp_spwm;
 #endif
 
-
 #if MYNEWT_VAL(I2C_0)
 static const struct nrf52_hal_i2c_cfg hal_i2c_cfg = {
     .scl_pin = 27,
@@ -272,7 +271,6 @@ assert(rc == 0);
                        NULL);
     assert(rc == 0);
 #endif
-
 
 #if (MYNEWT_VAL(OS_CPUTIME_TIMER_NUM) >= 0)
     rc = os_cputime_init(MYNEWT_VAL(OS_CPUTIME_FREQ));
