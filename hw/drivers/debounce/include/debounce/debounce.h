@@ -36,24 +36,27 @@
  * influence the minimum time a signal is required to remain stable for it
  * to be detected.
  *
- * The API relies on a structure of type \c debounce_t to remain valid for the
+ * The API relies on a structure of type \c debounce_pin_t to remain valid for the
  * lifetime of debouncing a pin. The structure can be dynamically allocated or
  * statically defined.
  *
  * // ---------------------- Example begin --------------------------
  *
- * void buttonPressed(debounce_t *d) {
- *     if (debounce_state(d)) {
+
+ * void buttonPressed(struct os_event *ev) {
+ *     if (debounce_state(ev->ev_arg)) {
  *         ... code to process button press event
  *     } else {
  *         ... code to process button depress event
  *     }
  * }
  *
- * debounce_t button;
+ * debounce_pin_t button;
  *
  * int main(int argc, char *argv[]) {
  *     ...
+ *     rc = hal_timer_config(0, 31250);
+ *     assert(rc == 0);
  *     debounce_init(&button, BUTTON_PIN, HAL_GPIO_PULL_UP, 0);
  *     debounce_start(&button, DEBOUNCE_CALLBACK_EVENT_ANY, buttonPressed, NULL);
  *     ...
@@ -70,6 +73,7 @@
 
 #include "hal/hal_gpio.h"
 #include "hal/hal_timer.h"
+#include "os/os_eventq.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -89,8 +93,7 @@ typedef struct debounce_pin {
     uint32_t ticks   : 16;
     uint32_t count   :  8;
     uint32_t accu    :  8;
-    void (*on_change)(struct debounce_pin*);
-    void *arg;
+    struct os_event on_change;
     struct hal_timer timer;
 } debounce_pin_t;
 
@@ -106,16 +109,6 @@ typedef enum debounce_callback_event {
     DEBOUNCE_CALLBACK_EVENT_FALL = 2, /* callbak when signal falls */
     DEBOUNCE_CALLBACK_EVENT_ANY  = 3  /* callbak when signal changes */
 } debounce_callback_event_t;
-
-/*
- * Prototype for the callback function. The callback has access to the pin,
- * current state and the initially provided argument through the API.
- * See also
- *  - debounce_arg
- *  - debounce_pin
- *  - debounce_state
- */
-typedef void (*debounce_callback_t)(debounce_pin_t *);
 
 /**
  * debounce init
@@ -168,14 +161,14 @@ int debounce_set_params(debounce_pin_t *d, uint16_t ticks, uint8_t count);
  *
  * @param d         Structure to manage debouncing
  * @param event     On which event(s) the callback should be invoked
- * @param cb        The callback
+ * @param cb        An os_event_fn to call using the default queue
  * @param arg       Transparent argument available to the callback
  *
  * @return int  0: no error; -1 otherwise.
  */
 int debounce_start(debounce_pin_t *d,
                    debounce_callback_event_t event,
-                   debounce_callback_t cb,
+                   os_event_fn *cb,
                    void *arg);
 
 /**
@@ -225,7 +218,7 @@ debounce_state(debounce_pin_t *d)
 static inline void*
 debounce_arg(debounce_pin_t *d)
 {
-    return d->arg;
+    return d->on_change.ev_arg;
 }
 
 #ifdef __cplusplus

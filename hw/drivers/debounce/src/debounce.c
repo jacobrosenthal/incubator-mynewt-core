@@ -29,19 +29,21 @@ debounce_check(void *arg)
     int32_t btn = hal_gpio_read(d->pin) ? +1 : -1;
     int32_t integrate = (int32_t)d->accu + btn;
 
+    // TODO not sure how to send out both the d value and the os_event arg that was passed
+    // basically broken until I send that back out
     if (integrate >= d->count) {
         if (0 == d->state) {
             d->state = 1;
-            if (d->on_rise && d->on_change) {
-                d->on_change(d);
+            if (d->on_rise && d->on_change.ev_cb) {
+                os_eventq_put(os_eventq_dflt_get(), &d->on_change);
             }
         }
         integrate = d->count;
     } else if ( integrate <= 0) {
         if (1 == d->state) {
             d->state = 0;
-            if (d->on_fall && d->on_change) {
-                d->on_change(d);
+            if (d->on_fall && d->on_change.ev_cb) {
+                os_eventq_put(os_eventq_dflt_get(), &d->on_change);
             }
         }
         integrate = 0;
@@ -107,13 +109,13 @@ debounce_set_params(debounce_pin_t *d, uint16_t ticks, uint8_t count)
 int
 debounce_start(debounce_pin_t *d,
                debounce_callback_event_t event,
-               debounce_callback_t cb,
+               os_event_fn *cb,
                void *arg)
 {
     d->on_rise = (event & DEBOUNCE_CALLBACK_EVENT_RISE) ? 1 : 0;
     d->on_fall = (event & DEBOUNCE_CALLBACK_EVENT_FALL) ? 1 : 0;
-    d->on_change = cb;
-    d->arg = arg;
+    d->on_change.ev_cb = cb;
+    d->on_change.ev_arg = arg;
 
     hal_gpio_irq_enable(d->pin);
     return 0;
