@@ -77,10 +77,8 @@ static const struct nrf51_hal_spi_cfg os_bsp_spi1s_cfg = {
 
 #if MYNEWT_VAL(ADC_0)
 static struct adc_dev os_bsp_adc0;
-static struct nrf51_adc_dev_cfg os_bsp_adc0_config = {
-    .nadc_refmv0    = MYNEWT_VAL(ADC_0_REFMV_0),
-    .nadc_refmv1    = MYNEWT_VAL(ADC_0_REFMV_1),
-    .nadc_refmv_vdd = MYNEWT_VAL(ADC_0_REFMV_VDD)
+static struct nrf52_adc_dev_cfg os_bsp_adc0_config = {
+    .nadc_refmv     = MYNEWT_VAL(ADC_0_REFMV_0),
 };
 #endif
 
