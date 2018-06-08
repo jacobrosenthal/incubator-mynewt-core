@@ -29,3 +29,4 @@ pkg.deps:
     - sys/console/full
     - hw/drivers/pwm
     - util/easing
+    - test/testutil

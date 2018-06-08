@@ -51,6 +51,10 @@
 #   define PWM_TEST_DEV   "pwm0"
 #endif
 
+
+#include "testutil/testutil.h"
+
+
 struct pwm_dev *pwm;
 static uint32_t pwm_freq = 200;
 static uint32_t max_steps = 200; /* two seconds motion up/down */
@@ -73,58 +77,12 @@ pwm_cycle_handler(void* unused)
     step += (up) ? 1 : -1;
 }
 
-static void
-pwm_end_seq_handler(void* unused)
-{
-    int rc;
-    step = 0;
-    up = false;
+TEST_CASE_DECL(test_pwm_open)
+TEST_CASE_DECL(test_pwm_close)
+TEST_CASE_DECL(test_pwm_enable)
 
-    switch (func_num)
-    {
-    case 0:
-        easing_funct = sine_int_io;
-        console_printf ("Easing: sine io\n");
-        break;
-    case 1:
-        easing_funct = bounce_int_io;
-        console_printf ("Easing: bounce io\n");
-        break;
-    case 2:
-        easing_funct = circular_int_io;
-        console_printf ("Easing: circular io\n");
-        break;
-    case 3:
-        easing_funct = quadratic_int_io;
-        console_printf ("Easing: quadratic io\n");
-        break;
-    case 4:
-        easing_funct = cubic_int_io;
-        console_printf ("Easing: cubic io\n");
-        break;
-    case 5:
-        easing_funct = quartic_int_io;
-        console_printf ("Easing: quartic io\n");
-        break;
-    default:
-        easing_funct = quintic_int_io;
-        console_printf ("Easing: quintic io\n");
-    }
 
-    if (func_num > 5) {
-        func_num = 0;
-    } else {
-        func_num++;
-    }
-    rc = pwm_disable(pwm); /* Not needed but used for testing purposes. */
-    assert(rc == 0);
-
-    rc = pwm_enable(pwm);
-    assert(rc == 0);
-}
-
-int
-pwm_init(void)
+TEST_CASE(test_pwm_open)
 {
     struct pwm_chan_cfg chan_conf = {
         .pin = PWM_TEST_CH_CFG_PIN,
@@ -135,7 +93,7 @@ pwm_init(void)
         .n_cycles = pwm_freq * 6, /* 6 seconds cycles */
         .int_prio = PWM_TEST_IRQ_PRIO,
         .cycle_handler = pwm_cycle_handler, /* this won't work on soft_pwm */
-        .seq_end_handler = pwm_end_seq_handler, /* this won't work on soft_pwm */
+        .seq_end_handler = NULL, /* this won't work on soft_pwm */
         .cycle_data = NULL,
         .seq_end_data = NULL,
         .data = NULL
@@ -156,18 +114,49 @@ pwm_init(void)
 
     /* console_printf ("Easing: sine io\n"); */
     rc = pwm_set_duty_cycle(pwm, PWM_TEST_CH_NUM, top_val);
-    rc = pwm_enable(pwm);
-    assert(rc == 0);
 
-    return rc;
+    TEST_ASSERT(rc == 0);
 }
+
+TEST_SUITE(test_suite_pwm_open)
+{
+    test_pwm_open();
+}
+
+TEST_CASE(test_pwm_close)
+{
+    os_dev_close((struct os_dev *)pwm);
+    TEST_ASSERT(0 == 0);
+
+}
+
+TEST_SUITE(test_suite_pwm_close)
+{
+    test_pwm_close();
+}
+
+
+TEST_CASE(test_pwm_enable)
+{
+    int rc = pwm_enable(pwm);
+    TEST_ASSERT(rc == 0);
+}
+
+TEST_SUITE(test_suite_pwm_enable)
+{
+    test_pwm_enable();
+}
+
+
 
 int
 main(int argc, char **argv)
 {
     sysinit();
 
-    pwm_init();
+    TEST_SUITE_REGISTER(test_suite_pwm_enable);
+    TEST_SUITE_REGISTER(test_suite_pwm_close);
+    TEST_SUITE_REGISTER(test_suite_pwm_open);
 
     while (1) {
         os_eventq_run(os_eventq_dflt_get());
