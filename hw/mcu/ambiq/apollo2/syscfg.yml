@@ -125,3 +125,7 @@ syscfg.defs:
                     APOLLO2_TIMER_SOURCE_TMRPINA
                     APOLLO2_TIMER_SOURCE_BUCKA
         value:
+
+    EXTRA_JTAG_CMD:
+        description: 'Extra commands to send to JTAG software'
+        value: ""

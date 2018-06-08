@@ -181,6 +181,9 @@ syscfg.defs:
         description: 'DIO3 pin for QSPI'
         value: -1
 
+    EXTRA_JTAG_CMD:
+        description: 'Extra commands to send to JTAG software'
+        value: ""
 
 # The XTAL_xxx definitions are used to set the clock source used for the low
 # frequency clock. It is required that at least one of these sources is
