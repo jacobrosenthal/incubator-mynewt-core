@@ -66,7 +66,7 @@ extern "C" {
 #define DRV2605_MODE_STANDBY                                    ((1) << DRV2605_MODE_STANDBY_POS)
 
 #define DRV2605_MODE_MODE_POS                                   0
-#define DRV2605_MODE_MODE_MASK                                   ((7) << DRV2605_MODE_MODE_POS)
+#define DRV2605_MODE_MODE_MASK                                  ((7) << DRV2605_MODE_MODE_POS)
 #define DRV2605_MODE_INTERNAL_TRIGGER                           ((0) << DRV2605_MODE_MODE_POS)
 #define DRV2605_MODE_EXTERNAL_TRIGGER_EDGE                      ((1) << DRV2605_MODE_MODE_POS)
 #define DRV2605_MODE_EXTERNAL_TRIGGER_LEVEL                     ((2) << DRV2605_MODE_MODE_POS)

@@ -44,8 +44,11 @@ enum drv2605_power_mode {
     DRV2605_POWER_OFF //en pin low
 };
 
+//DRV2605_OP_EXTERNAL_EDGE and DRV2605_OP_EXTERNAL_LEVEL not currently supported
 enum drv2605_op_mode {
     DRV2605_OP_ROM = 0x00,
+    DRV2605_OP_EXTERNAL_EDGE,
+    DRV2605_OP_EXTERNAL_LEVEL,
     DRV2605_OP_PWM,
     DRV2605_OP_ANALOG,
     DRV2605_OP_RTP,
@@ -101,6 +104,15 @@ int
 drv2605_shell_init(void);
 #endif
 
+/**
+ * Get the current op mode from device
+ *
+ * @param The sensor interface
+ * @param Pointer to drv2605_op_mode enum
+ * @return 0 on success, non-zero on failure
+ */
+int
+drv2605_get_op_mode(struct sensor_itf *itf, enum drv2605_op_mode *mode);
 
 /**
  * Get a best effort defaults for the drv2605_cal

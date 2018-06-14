@@ -367,6 +367,31 @@ drv2605_shell_cmd_power_mode(int argc, char **argv, struct drv2605 *drv2605)
     enum drv2605_power_mode mode;
     struct sensor_itf *itf;
 
+    itf = SENSOR_GET_ITF(&(drv2605->sensor));
+
+    if (argc < 3) {
+        rc = drv2605_get_power_mode(itf, &mode);
+        if (rc) {
+            console_printf("power_mode failed %d\n", rc);
+            goto err;
+        }
+
+        switch(mode) {
+            case DRV2605_POWER_STANDBY:
+                console_printf("DRV2605_POWER_STANDBY\n");
+                break;
+            case DRV2605_POWER_ACTIVE:
+                console_printf("DRV2605_POWER_ACTIVE\n");
+                break;
+            case DRV2605_POWER_OFF:
+                console_printf("DRV2605_POWER_OFF\n");
+                break;
+            default:
+                console_printf("unknown?\n");
+        }
+        return 0;
+    }
+
     if(strcmp(argv[2],"off") == 0) {
         mode = DRV2605_POWER_OFF;
     }else if(strcmp(argv[2],"standby") == 0) {
@@ -376,8 +401,6 @@ drv2605_shell_cmd_power_mode(int argc, char **argv, struct drv2605 *drv2605)
     }else {
         return drv2605_shell_err_unknown_arg(argv[2]);
     }
-
-    itf = SENSOR_GET_ITF(&(drv2605->sensor));
 
     rc = drv2605_set_power_mode(itf, mode);
     if (rc) {
@@ -396,23 +419,44 @@ static int
 drv2605_shell_cmd_op_mode(int argc, char **argv, struct drv2605 *drv2605)
 {
     int rc;
+    enum drv2605_op_mode mode;
+    struct sensor_itf *itf;
 
-    if(strcmp(argv[2],"rom") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_ROM;
-    }else if(strcmp(argv[2],"reset") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_RESET;
-    }else if(strcmp(argv[2],"pwm") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_PWM;
-    }else if(strcmp(argv[2],"analog") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_ANALOG;
-    }else if(strcmp(argv[2],"rtp") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_RTP;
-    }else if(strcmp(argv[2],"diag") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_DIAGNOSTIC;
-    }else if(strcmp(argv[2],"cal") == 0) {
-        drv2605->cfg.op_mode = DRV2605_OP_CALIBRATION;
-    }else {
-        return drv2605_shell_err_unknown_arg(argv[2]);
+    if (argc < 3) {
+        itf = SENSOR_GET_ITF(&(drv2605->sensor));
+
+        rc = drv2605_get_op_mode(itf, &mode);
+        if (rc) {
+            console_printf("power_mode failed %d\n", rc);
+            goto err;
+        }
+
+        switch(mode) {
+            case DRV2605_OP_ROM:
+                console_printf("DRV2605_OP_ROM\n");
+                break;
+            case DRV2605_OP_RESET:
+                console_printf("DRV2605_OP_RESET\n");
+                break;
+            case DRV2605_OP_PWM:
+                console_printf("DRV2605_OP_PWM\n");
+                break;
+            case DRV2605_OP_ANALOG:
+                console_printf("DRV2605_OP_ANALOG\n");
+                break;
+            case DRV2605_OP_RTP:
+                console_printf("DRV2605_OP_RTP\n");
+                break;
+            case DRV2605_OP_DIAGNOSTIC:
+                console_printf("DRV2605_OP_DIAGNOSTIC\n");
+                break;
+            case DRV2605_OP_CALIBRATION:
+                console_printf("DRV2605_OP_CALIBRATION\n");
+                break;
+            default:
+                console_printf("unknown?\n");
+        }
+        return 0;
     }
 
     rc = drv2605_config(drv2605, &drv2605->cfg);

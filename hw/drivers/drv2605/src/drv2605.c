@@ -580,6 +580,22 @@ drv2605_set_power_mode(struct sensor_itf *itf, enum drv2605_power_mode power_mod
 }
 
 int
+drv2605_get_op_mode(struct sensor_itf *itf, enum drv2605_op_mode *mode)
+{
+    int rc;
+    uint8_t reg;
+
+    rc = drv2605_read8(itf, DRV2605_MODE_ADDR, &reg);
+    if (rc) {
+        return rc;
+    }
+
+    *mode = (reg & DRV2605_MODE_MODE_MASK) >> DRV2605_MODE_MODE_POS;
+
+    return 0;
+}
+
+int
 drv2605_validate_cal(struct drv2605_cal *cal)
 {
     int rc;
@@ -825,6 +841,9 @@ drv2605_config(struct drv2605 *drv2605, struct drv2605_cfg *cfg)
     switch(cfg->op_mode) {
         case DRV2605_OP_ROM:
             return drv2605_mode_rom(itf);
+        case DRV2605_OP_EXTERNAL_EDGE:
+        case DRV2605_OP_EXTERNAL_LEVEL:
+            return SYS_ENOTSUP;
         case DRV2605_OP_PWM:
             return drv2605_mode_pwm(itf);
         case DRV2605_OP_ANALOG:
