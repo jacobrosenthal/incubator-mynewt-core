@@ -440,7 +440,7 @@ nrf52_pwm_configure_channel(struct pwm_dev *dev,
     struct nrf52_pwm_dev_global *instance = &instances[inst_id];
     nrfx_pwm_config_t *config = &instance->config;
 
-    if (!instance->) {
+    if (!instance->in_use) {
         return (EINVAL);
     }
 
