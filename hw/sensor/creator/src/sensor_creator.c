@@ -21,6 +21,9 @@
 #include <string.h>
 #include "os/mynewt.h"
 
+#if MYNEWT_VAL(SI114X_OFB)
+#include <si114x/si114x.h>
+#endif
 #if MYNEWT_VAL(DRV2605_OFB)
 #include "hal/hal_gpio.h"
 #include <drv2605/drv2605.h>
@@ -84,6 +87,10 @@
 /* Driver definitions */
 #if MYNEWT_VAL(DRV2605_OFB)
 static struct drv2605 drv2605;
+#endif
+
+#if MYNEWT_VAL(SI114X_OFB)
+static struct si114x si114x;
 #endif
 
 #if MYNEWT_VAL(LSM303DLHC_OFB)
@@ -187,6 +194,14 @@ static struct sensor_itf i2c_0_itf_drv = {
     .si_num  = 0,
     .si_addr = MYNEWT_VAL(DRV2605_SHELL_ITF_ADDR),
     .si_cs_pin = MYNEWT_VAL(DRV2605_EN_PIN)
+};
+#endif
+
+#if MYNEWT_VAL(I2C_1) && MYNEWT_VAL(SI114X_OFB)
+static struct sensor_itf i2c_1_itf_drv = {
+    .si_type = SENSOR_ITF_I2C,
+    .si_num  = 1,
+    .si_addr = MYNEWT_VAL(SI114X_SHELL_ITF_ADDR)
 };
 #endif
 
@@ -548,6 +563,29 @@ config_drv2605_actuator(void)
     assert(dev != NULL);
 
     rc = drv2605_config((struct drv2605 *) dev, &cfg);
+
+    os_dev_close(dev);
+    return rc;
+}
+#endif
+
+/**
+ * SI114X Actuator default configuration used by the creator package
+ *
+ * @return 0 on success, non-zero on failure
+ */
+#if MYNEWT_VAL(SI114X_OFB)
+static int
+config_si114x(void)
+{
+    int rc;
+    struct os_dev *dev;
+    struct si114x_cfg cfg = {0};
+
+    dev = (struct os_dev *) os_dev_open("si114x_0", OS_TIMEOUT_NEVER, NULL);
+    assert(dev != NULL);
+
+    rc = si114x_config((struct si114x *) dev, &cfg);
 
     os_dev_close(dev);
     return rc;
@@ -994,6 +1032,15 @@ sensor_dev_create(void)
     assert(rc == 0);
 
     rc = config_drv2605_actuator();
+    assert(rc == 0);
+#endif
+
+#if MYNEWT_VAL(SI114X_OFB)
+    rc = os_dev_create((struct os_dev *) &si114x, "si114x_0",
+      OS_DEV_INIT_PRIMARY, 0, si114x_init, (void *)&i2c_1_itf_drv);
+    assert(rc == 0);
+
+    rc = config_si114x();
     assert(rc == 0);
 #endif
 

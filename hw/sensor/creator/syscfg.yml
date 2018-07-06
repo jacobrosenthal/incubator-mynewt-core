@@ -25,6 +25,9 @@ syscfg.defs:
     DRV2605_OFB:
         description: 'DRV2605 is present'
         value : 0
+    SI114X_OFB:
+        description: 'SI114X is present'
+        value : 0
     LSM303DLHC_OFB:
         description: 'LSM303 is present'
         value : 0
