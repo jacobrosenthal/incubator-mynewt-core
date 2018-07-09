@@ -38,7 +38,7 @@ extern "C" {
 
 #define SI114X_INT_CFG_ADDR 0x03
 #define SI114X_INT_CFG_INT_OE_POS                            	0
-#define SI114X_INT_CFG_INT_OE_MASK                           	(0x1 << SI114X_INT_CFG_INT_MODE_POS)
+#define SI114X_INT_CFG_INT_OE_MASK                           	(0x1 << SI114X_INT_CFG_INT_OE_POS)
 #define SI114X_INT_CFG_INT_MODE_POS                            	1
 #define SI114X_INT_CFG_INT_MODE_MASK                           	(0x1 << SI114X_INT_CFG_INT_MODE_POS)
 
@@ -78,8 +78,17 @@ extern "C" {
 #define SI114X_ALS_LOW_TH1_ADDR 0x0C
 #define SI114X_ALS_HI_TH0_ADDR 0x0D
 #define SI114X_ALS_HI_TH1_ADDR 0x0E
+
 #define SI114X_PS_LED21_ADDR 0x0F
+#define SI114X_PS_LED21_LED2_POS								4
+#define SI114X_PS_LED21_LED2_MASK                           	(0x0F << SI114X_PS_LED21_LED2_POS)
+#define SI114X_PS_LED21_LED1_POS								0
+#define SI114X_PS_LED21_LED1_MASK                           	(0x0F << SI114X_PS_LED21_LED1_POS)
+
 #define SI114X_PS_LED3_ADDR 0x10
+#define SI114X_PS_LED3_LED3_POS 								0
+#define SI114X_PS_LED3_LED3_MASK								(0x0F << SI114X_PS_LED3_LED3_POS)
+
 #define SI114X_PS1_TH0_ADDR 0x11
 #define SI114X_PS1_TH1_ADDR 0x12
 #define SI114X_PS2_TH0_ADDR 0x13
@@ -99,15 +108,10 @@ extern "C" {
 // PS (Parameter Field PSx_IM = 11). Use of INT_MODE = 0 is recommended.
 #define SI114X_IRQ_STATUS_ADDR 0x21
 #define SI114X_IRQ_STATUS_ALS_INT_POS							0
-#define SI114X_IRQ_STATUS_ALS_INT_MASK                         	(0x3 << SI114X_IRQ_STATUS_ALS_INT_POS)
 #define SI114X_IRQ_STATUS_PS1_INT_POS							2
-#define SI114X_IRQ_STATUS_PS1_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS1_INT_POS)
 #define SI114X_IRQ_STATUS_PS2_INT_POS							3
-#define SI114X_IRQ_STATUS_PS2_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS2_INT_POS)
 #define SI114X_IRQ_STATUS_PS3_INT_POS							4
-#define SI114X_IRQ_STATUS_PS3_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS3_INT_MASK)
 #define SI114X_IRQ_STATUS_CMD_INT_POS							5
-#define SI114X_IRQ_STATUS_CMD_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_CMD_INT_POS)
 
 #define SI114X_ALS_VIS_DATA0_ADDR 0x22
 #define SI114X_ALS_VIS_DATA1_ADDR 0x23

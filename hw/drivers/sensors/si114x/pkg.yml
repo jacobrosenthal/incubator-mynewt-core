@@ -18,7 +18,7 @@
 #
 
 pkg.name: hw/drivers/sensors/si114x
-pkg.description: i2c driver for the si114x proximity ambient light sensor
+pkg.description: i2c driver for the si114x proximity ambient light family sequencer A11 based on Si114x.pdf Rev. 1.41
 pkg.author: Jacob Rosenthal
 pkg.homepage:
 pkg.keywords:
@@ -35,5 +35,5 @@ pkg.deps:
     - "@apache-mynewt-core/hw/hal"
     - "@apache-mynewt-core/hw/sensor"
 
-pkg.deps.DRV2605_CLI:
+pkg.deps.SI114X_CLI:
     - "@apache-mynewt-core/util/parse"

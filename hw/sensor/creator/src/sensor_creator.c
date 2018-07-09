@@ -580,12 +580,35 @@ config_si114x(void)
 {
     int rc;
     struct os_dev *dev;
-    struct si114x_cfg cfg = {0};
+    struct si114x_cfg si114x_cfg = {0};
 
     dev = (struct os_dev *) os_dev_open("si114x_0", OS_TIMEOUT_NEVER, NULL);
     assert(dev != NULL);
 
-    rc = si114x_config((struct si114x *) dev, &cfg);
+    si114x_cfg.op_mode = SI114X_OP_PS_ALS_AUTO;
+    si114x_cfg.int_en = 1;
+
+    si114x_cfg.measure_rate = 0x99;  // 4.78125ms measurement rate  (0x99 x 31.25 μs)
+    si114x_cfg.measure_mask = SI114X_MEASURE_PS1;
+
+    si114x_cfg.proximity_rate = 0x08; // PS Measurements made every time the device wakes up
+    si114x_cfg.ambient.rate = 0x08; // ALS Measurements made every time the device wakes up
+
+    si114x_cfg.proximity_adc_gain = 0x4;
+    si114x_cfg.proximity_adc_recovery = 0x07; // 511 ADC Clock (25.55 μs times 2PS_ADC_GAIN
+    si114x_cfg.proximity_adc_mode = SI114X_ADC_MODE_NORMAL;//RAW
+
+    si114x_cfg.ps1.current = 0x0b;
+    si114x_cfg.ps1.led_drive_mask = SI114X_PROXIMITY_DRIVE_PS1 | SI114X_PROXIMITY_DRIVE_PS2;
+    si114x_cfg.ps1.mux = SI114X_MUX_LARGE;
+
+    si114x_cfg.ps2.current = 0x0b;
+    si114x_cfg.ps2.mux = SI114X_MUX_LARGE;
+
+    //not sure about these..Certainly I could be a proximity... do we have another one?
+    // si114x_cfg.mask = SENSOR_TYPE_LIGHT | SENSOR_TYPE_PROXIMITY;
+
+    rc = si114x_config((struct si114x *) dev, &si114x_cfg);
 
     os_dev_close(dev);
     return rc;

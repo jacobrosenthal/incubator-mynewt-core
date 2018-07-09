@@ -18,6 +18,9 @@
 #
 
 syscfg.defs:
+    SI114X_INT_PIN_HOST:
+        description: 'Interrupt pin number on host device connected to INT on device'
+        value: -1
     SI114X_CLI:
         description: 'Enable shell support for the DRV2605'
         value: 0
@@ -36,3 +39,6 @@ syscfg.defs:
     SI114X_SHELL_ITF_ADDR:
         description: 'DRV2605 I2C Address'
         value: 0x5A
+    SI114X_NOTIF_STATS:
+        description: 'Enable notification stats'
+        value: 1
