@@ -26,6 +26,8 @@
 #include "hal/hal_gpio.h"
 #include "si114x/si114x.h"
 #include "si114x_priv.h"
+#include "sensor/sensor.h"
+#include "sensor/proximity.h"
 
 #if MYNEWT_VAL(SI114X_LOG)
 #include "log/log.h"
@@ -613,48 +615,48 @@ init_interrupt(struct si114x_int *interrupt, struct sensor_int *ints)
     interrupt->ints = ints;
 }
 
-// static void
-// undo_interrupt(struct si114x_int * interrupt)
-// {
-//     OS_ENTER_CRITICAL(interrupt->lock);
-//     interrupt->active = false;
-//     interrupt->asleep = false;
-//     OS_EXIT_CRITICAL(interrupt->lock);
-// }
+static void
+undo_interrupt(struct si114x_int * interrupt)
+{
+    OS_ENTER_CRITICAL(interrupt->lock);
+    interrupt->active = false;
+    interrupt->asleep = false;
+    OS_EXIT_CRITICAL(interrupt->lock);
+}
 
-// static int
-// wait_interrupt(struct si114x_int *interrupt, uint8_t int_num)
-// {
-//     bool wait;
-//     os_error_t error;
+static int
+wait_interrupt(struct si114x_int *interrupt)
+{
+    bool wait;
+    os_error_t error;
 
-//     OS_ENTER_CRITICAL(interrupt->lock);
+    OS_ENTER_CRITICAL(interrupt->lock);
 
-//     /* Check if we did not missed interrupt */
-//     if (hal_gpio_read(interrupt->ints[int_num].host_pin) ==
-//                                             interrupt->ints[int_num].active) {
-//         OS_EXIT_CRITICAL(interrupt->lock);
-//         return OS_OK;
-//     }
+    /* Check if we did not missed interrupt */
+    if (hal_gpio_read(interrupt->ints[0].host_pin) ==
+                                            interrupt->ints[0].active) {
+        OS_EXIT_CRITICAL(interrupt->lock);
+        return OS_OK;
+    }
 
-//     if (interrupt->active) {
-//         interrupt->active = false;
-//         wait = false;
-//     } else {
-//         interrupt->asleep = true;
-//         wait = true;
-//     }
-//     OS_EXIT_CRITICAL(interrupt->lock);
+    if (interrupt->active) {
+        interrupt->active = false;
+        wait = false;
+    } else {
+        interrupt->asleep = true;
+        wait = true;
+    }
+    OS_EXIT_CRITICAL(interrupt->lock);
 
-//     if (wait) {
-//         error = os_sem_pend(&interrupt->wait, SI114X_MAX_INT_WAIT);
-//         if (error == OS_TIMEOUT) {
-//             return error;
-//         }
-//         assert(error == OS_OK);
-//     }
-//     return OS_OK;
-// }
+    if (wait) {
+        error = os_sem_pend(&interrupt->wait, SI114X_MAX_INT_WAIT);
+        if (error == OS_TIMEOUT) {
+            return error;
+        }
+        assert(error == OS_OK);
+    }
+    return OS_OK;
+}
 
 static void
 wake_interrupt(struct si114x_int *interrupt)
@@ -687,7 +689,6 @@ si114x_int_irq_handler(void *arg)
 
     si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
 
-    // todo store and call user handlers
     if(si114x->pdd.interrupt) {
         wake_interrupt(si114x->pdd.interrupt);
     }
@@ -853,37 +854,284 @@ err:
     return rc;
 }
 
+/**
+ * Gets a new data sample from the sensor.
+ *
+ * @param The sensor interface
+ * @param x axis data
+ * @param y axis data
+ * @param z axis data
+ *
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_get_data(struct sensor_itf *itf, int16_t *x)
+{
+    int rc;
+    uint8_t payload[2] = {0};
+
+    *x = 0;
+
+    //todo, what about others, how to tell?
+    rc = si114x_readlen(itf, SI114X_PS1_DATA0_ADDR, payload, 2);
+    if (rc) {
+        goto err;
+    }
+
+    *x = payload[0] | (payload[1] << 8);
+
+    return 0;
+err:
+    return rc;
+}
+
+static int si114x_do_read(struct sensor *sensor, sensor_data_func_t data_func,
+                            void * data_arg)
+{
+    struct sensor_proximity_data proximity_data;
+    struct sensor_itf *itf;
+    int16_t ps1;
+    int rc;
+
+    itf = SENSOR_GET_ITF(sensor);
+
+    ps1 = 0;
+
+    rc = si114x_get_data(itf, &ps1);
+    if (rc) {
+        goto err;
+    }
+
+    //todo fill others
+    proximity_data.ps1 = ps1;
+    // proximity_data.ps2 = ps2;
+    // proximity_data.ps3 = ps3;
+    // proximity_data.als = als;
+
+    proximity_data.ps1_is_valid = 1;
+    proximity_data.ps2_is_valid = 0;
+    proximity_data.ps3_is_valid = 0;
+    proximity_data.als_is_valid = 0;
+
+    /* Call data function */
+    rc = data_func(sensor, data_arg, &proximity_data, SENSOR_TYPE_PROXIMITY);
+    if (rc != 0) {
+        goto err;
+    }
+
+    return 0;
+err:
+    return rc;  
+}
+
+/**
+ * Do accelerometer polling reads
+ *
+ * @param sensor The sensor ptr
+ * @param sensor_type The sensor type
+ * @param read_func The function pointer to invoke for each accelerometer reading.
+ * @param read_arg The opaque pointer that will be passed in to the function.
+ * @param time_ms If non-zero, how long the stream should run in milliseconds.
+ *
+ * @return 0 on success, non-zero on failure.
+ */
+int
+si114x_poll_read(struct sensor *sensor,
+                     sensor_type_t sensor_type,
+                     sensor_data_func_t read_func,
+                     void *read_arg,
+                     uint32_t time_ms)
+{
+    struct si114x_pdd *pdd;
+    struct si114x *si114x;
+    struct si114x_cfg *cfg;
+    os_time_t time_ticks;
+    os_time_t stop_ticks = 0;
+    int rc, rc2;
+
+    /* If the read isn't looking for our data, don't do anything. */
+    if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
+        return SYS_EINVAL;
+    }
+
+    si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
+    pdd = &si114x->pdd;
+    cfg = &si114x->cfg;
+
+    if (cfg->read_mode.mode != SI114X_READ_M_STREAM) {
+        return SYS_EINVAL;
+    }
+
+    undo_interrupt(&si114x->intr);
+
+    if (pdd->interrupt) {
+        return SYS_EBUSY;
+    }
+
+    /* enable interrupt */
+    pdd->interrupt = &si114x->intr;
+
+    rc = enable_interrupt(sensor, cfg->read_mode.int_cfg,
+                          0);
+    if (rc) {
+        return rc;
+    }
+
+    if (time_ms != 0) {
+        rc = os_time_ms_to_ticks(time_ms, &time_ticks);
+        if (rc) {
+            goto err;
+        }
+        stop_ticks = os_time_get() + time_ticks;
+    }
+
+    for (;;) {
+        //todo what about others
+        si114x_proximity_force(itf);
+
+        /* force at least one read for cases when fifo is disabled */
+        rc = wait_interrupt(&si114x->intr);
+        if (rc) {
+            goto err;
+        }
+
+        rc = si114x_do_read(sensor, read_func, read_arg);
+        if (rc) {
+            goto err;
+        }
+
+        if (time_ms != 0 && OS_TIME_TICK_GT(os_time_get(), stop_ticks)) {
+            break;
+        }
+
+    }
+
+err:
+    /* disable interrupt */
+    pdd->interrupt = NULL;
+    rc2 = disable_interrupt(sensor, cfg->read_mode.int_cfg,
+                           0);
+
+    if (rc) {
+        return rc;
+    } else {
+        return rc2;
+    }
+}
+
+int
+si114x_stream_read(struct sensor *sensor,
+                     sensor_type_t sensor_type,
+                     sensor_data_func_t read_func,
+                     void *read_arg,
+                     uint32_t time_ms)
+{
+    struct si114x_pdd *pdd;
+    struct si114x *si114x;
+    struct si114x_cfg *cfg;
+    os_time_t time_ticks;
+    os_time_t stop_ticks = 0;
+    int rc, rc2;
+
+    /* If the read isn't looking for our data, don't do anything. */
+    if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
+        return SYS_EINVAL;
+    }
+
+    si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
+    pdd = &si114x->pdd;
+    cfg = &si114x->cfg;
+
+    if (cfg->read_mode.mode != SI114X_READ_M_STREAM) {
+        return SYS_EINVAL;
+    }
+
+        //todo what about others
+        si114x_proximity_force(itf);
+
+    undo_interrupt(&si114x->intr);
+
+    if (pdd->interrupt) {
+        return SYS_EBUSY;
+    }
+
+    /* enable interrupt */
+    pdd->interrupt = &si114x->intr;
+
+    rc = enable_interrupt(sensor, cfg->read_mode.int_cfg,
+                          0);
+    if (rc) {
+        return rc;
+    }
+
+    if (time_ms != 0) {
+        rc = os_time_ms_to_ticks(time_ms, &time_ticks);
+        if (rc) {
+            goto err;
+        }
+        stop_ticks = os_time_get() + time_ticks;
+    }
+
+    for (;;) {
+
+        /* force at least one read for cases when fifo is disabled */
+        rc = wait_interrupt(&si114x->intr);
+        if (rc) {
+            goto err;
+        }
+
+        rc = si114x_do_read(sensor, read_func, read_arg);
+        if (rc) {
+            goto err;
+        }
+
+        if (time_ms != 0 && OS_TIME_TICK_GT(os_time_get(), stop_ticks)) {
+            break;
+        }
+
+    }
+
+err:
+    /* disable interrupt */
+    pdd->interrupt = NULL;
+    rc2 = disable_interrupt(sensor, cfg->read_mode.int_cfg,
+                           0);
+
+    if (rc) {
+        return rc;
+    } else {
+        return rc2;
+    }
+}
+
 static int
 si114x_sensor_read(struct sensor *sensor, sensor_type_t type,
         sensor_data_func_t data_func, void *data_arg, uint32_t timeout)
 {
-//     int rc;
-//     const struct si114x_cfg *cfg;
-//     struct si114x *si114x;
-//     struct sensor_itf *itf;
+    int rc;
+    const struct si114x_cfg *cfg;
+    struct si114x *si114x;
 
-//     /* If the read isn't looking for accel data, don't do anything. */
-//     if (!(type & SENSOR_TYPE_ACCELEROMETER)) {
-//         rc = SYS_EINVAL;
-//         goto err;
-//     }
+    /* If the read isn't looking for our data, don't do anything. */
+    if (!(type & SENSOR_TYPE_PROXIMITY)) {
+        rc = SYS_EINVAL;
+        goto err;
+    }
 
-//     itf = SENSOR_GET_ITF(sensor);
+    si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
+    cfg = &si114x->cfg;
 
-//     si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
-//     cfg = &si114x->cfg;
-
-//     if (cfg->read_mode.mode == LIS2DW12_READ_M_POLL) {
-//         rc = si114x_poll_read(sensor, type, data_func, data_arg, timeout);
-//     } else {
-//         rc = si114x_stream_read(sensor, type, data_func, data_arg, timeout);
-//     }
-// err:
-//     if (rc) {
-//         return SYS_EINVAL; /* XXX */
-//     } else {
+    if (cfg->read_mode.mode == SI114X_READ_M_POLL) {
+        rc = si114x_poll_read(sensor, type, data_func, data_arg, timeout);
+    } else {
+        rc = si114x_stream_read(sensor, type, data_func, data_arg, timeout);
+    }
+err:
+    if (rc) {
+        return SYS_EINVAL; /* XXX */
+    } else {
         return SYS_EOK;
-    // }
+    }
 }
 
 static struct si114x_notif_cfg *
@@ -1065,7 +1313,7 @@ si114x_sensor_get_config(struct sensor *sensor, sensor_type_t type,
 {
     int rc;
 
-    if ((type != SENSOR_TYPE_LIGHT)) {
+    if ((type != SENSOR_TYPE_PROXIMITY)) {
         rc = SYS_EINVAL;
         goto err;
     }
@@ -1539,8 +1787,6 @@ err:
 
 /**
  * Set a proximity struct
- * TODO I dont love this right now, enable interrupt wants the si114x
- * and this function calls that so right now this takes si114x
  *
  * @param itf The sensor interface
  * @param proximity The proximity struct
@@ -1725,6 +1971,44 @@ si114x_set_measure_mask(struct sensor_itf *itf, uint8_t measure_mask)
 }
 
 /**
+ * Force a proximity reading when in forced mode
+ *
+ * @param itf The sensor interface
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_proximity_force(struct sensor_itf *itf)
+{
+    return si114x_write_command(itf, SI114X_PARAM_PS_FORCE);
+}
+
+/**
+ * Force a proximity reading when in forced mode.
+ * The reading is returned in the handler
+ *
+ * @param itf The sensor interface
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_ambient_force(struct sensor_itf *itf)
+{
+    return si114x_write_command(itf, SI114X_PARAM_ALS_FORCE);
+}
+
+/**
+ * Force both an ambient and proximity reading when in forced mode
+ * The reading is returned in the handler
+ *
+ * @param itf The sensor interface
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_force(struct sensor_itf *itf)
+{
+    return si114x_write_command(itf, SI114X_PARAM_PSALS_FORCE);
+}
+
+/**
  * Set up  the si114x with the configuration parameters given
  *
  * @param dev  Pointer to the si114x_dev device descriptor
@@ -1795,9 +2079,12 @@ si114x_config(struct si114x *si114x, struct si114x_cfg *cfg)
         goto err;
     }
 
-    // si114x->cfg.read_mode.int_cfg = cfg->read_mode.int_cfg;
-    // si114x->cfg.read_mode.int_num = cfg->read_mode.int_num;
-    // si114x->cfg.read_mode.mode = cfg->read_mode.mode;
+    //todo .. this isnt kept up if anyone uses accessor methods..
+    //dont know why wasting all this memory to save this atm..
+    si114x_sensor_set_config(&(si114x->sensor), &(si114x->cfg));
+
+    si114x->cfg.read_mode.int_cfg = cfg->read_mode.int_cfg;
+    si114x->cfg.read_mode.mode = cfg->read_mode.mode;
 
     if (!cfg->notif_cfg) {
         si114x->cfg.notif_cfg = (struct si114x_notif_cfg *)dflt_notif_cfg;

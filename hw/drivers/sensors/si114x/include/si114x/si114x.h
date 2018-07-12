@@ -91,6 +91,7 @@ extern "C" {
 #define SI114X_PARAM_ALS_IR_ADC_GAIN_OFFSET 0x1E
 #define SI114X_PARAM_ALS_IR_ADC_MISC_OFFSET 0x1F
 
+
 /* interrupt mode for ambient sense */
 enum si114x_ambient_int_mode {
     SI114X_ALS_IM_ALS_VIS_EVERY,
@@ -181,6 +182,17 @@ struct si114x_notif_cfg {
     uint8_t int_cfg;
 };
 
+enum si114x_read_mode {
+    SI114X_READ_M_POLL = 0,
+    SI114X_READ_M_STREAM = 1,
+};
+
+/* Read mode configuration */
+struct si114x_read_mode_cfg {
+    enum si114x_read_mode mode;
+    uint8_t int_cfg;
+};
+
 /* top level si114x configuration struct  */
 struct si114x_cfg {
     enum si114x_op_mode op_mode;
@@ -200,6 +212,9 @@ struct si114x_cfg {
     /* Notif config */
     struct si114x_notif_cfg *notif_cfg;
     uint8_t max_num_notif;
+
+    /* Read mode config */
+    struct si114x_read_mode_cfg read_mode;
 
     /* Sensor type mask to track enabled sensors */
     sensor_type_t mask;
@@ -264,6 +279,35 @@ si114x_init(struct os_dev *dev, void *arg);
  */
 int
 si114x_config(struct si114x *si114x, struct si114x_cfg *cfg);
+
+/**
+ * Force a proximity reading when in forced mode
+ *
+ * @param itf The sensor interface
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_proximity_force(struct sensor_itf *itf);
+
+/**
+ * Force a proximity reading when in forced mode.
+ * The reading is returned in the handler
+ *
+ * @param itf The sensor interface
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_ambient_force(struct sensor_itf *itf);
+
+/**
+ * Force both an ambient and proximity reading when in forced mode
+ * The reading is returned in the handler
+ *
+ * @param itf The sensor interface
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_force(struct sensor_itf *itf);
 
 
 #if MYNEWT_VAL(SI114X_CLI)
