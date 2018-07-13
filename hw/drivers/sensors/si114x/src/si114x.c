@@ -30,7 +30,7 @@
 #include "sensor/proximity.h"
 
 #if MYNEWT_VAL(SI114X_LOG)
-#include "log/log.h"
+#include "modlog/modlog.h"
 #endif
 
 #if MYNEWT_VAL(SI114X_STATS)
@@ -92,13 +92,10 @@ STATS_SECT_DECL(si114x_stat_section) g_si114xstats;
 #endif
 
 #if MYNEWT_VAL(SI114X_LOG)
-#define LOG_MODULE_SI114X (306)
-#define SI114X_INFO(...)  LOG_INFO(&_log, LOG_MODULE_SI114X, __VA_ARGS__)
-#define SI114X_ERR(...)   LOG_ERROR(&_log, LOG_MODULE_SI114X, __VA_ARGS__)
-static struct log _log;
+#define SI114X_LOG(lvl_, ...) \
+    MODLOG_ ## lvl_(MYNEWT_VAL(SI114X_LOG_MODULE), __VA_ARGS__)
 #else
-#define SI114X_INFO(...)
-#define SI114X_ERR(...)
+#define SI114X_LOG(lvl_, ...)
 #endif
 
 /* Exports for the sensor API */
@@ -158,7 +155,7 @@ si114x_writelen(struct sensor_itf *itf, uint8_t addr, uint8_t *buffer,
     /* Register write */
     rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 1);
     if (rc) {
-        SI114X_ERR("I2C access failed at address 0x%02X\n", data_struct.address);
+        SI114X_LOG(ERROR, "I2C access failed at address 0x%02X\n", data_struct.address);
         STATS_INC(g_si114xstats, write_errors);
         goto err;
     }
@@ -209,7 +206,7 @@ si114x_read8(struct sensor_itf *itf, uint8_t reg, uint8_t *value)
     payload = reg;
     rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 0);
     if (rc) {
-        SI114X_ERR("I2C register write failed at address 0x%02X:0x%02X\n",
+        SI114X_LOG(ERROR, "I2C register write failed at address 0x%02X:0x%02X\n",
                    data_struct.address, reg);
 #if MYNEWT_VAL(SI114X_STATS)
         STATS_INC(g_si114xstats, errors);
@@ -222,7 +219,7 @@ si114x_read8(struct sensor_itf *itf, uint8_t reg, uint8_t *value)
     rc = hal_i2c_master_read(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 1);
     *value = payload;
     if (rc) {
-        SI114X_ERR("Failed to read from 0x%02X:0x%02X\n", data_struct.address, reg);
+        SI114X_LOG(ERROR, "Failed to read from 0x%02X:0x%02X\n", data_struct.address, reg);
 #if MYNEWT_VAL(SI114X_STATS)
         STATS_INC(g_si114xstats, errors);
 #endif
@@ -713,7 +710,7 @@ init_intpin(struct si114x *si114x, hal_gpio_irq_handler_t handler,
     }
 
     if (pin < 0) {
-        SI114X_ERR("Interrupt pin not configured\n");
+        SI114X_LOG(ERROR, "Interrupt pin not configured\n");
         return SYS_EINVAL;
     }
 
@@ -729,7 +726,7 @@ init_intpin(struct si114x *si114x, hal_gpio_irq_handler_t handler,
                            trig,
                            HAL_GPIO_PULL_NONE);
     if (rc != 0) {
-        SI114X_ERR("Failed to initialise interrupt pin %d\n", pin);
+        SI114X_LOG(ERROR, "Failed to initialise interrupt pin %d\n", pin);
         return rc;
     }
 
@@ -948,11 +945,14 @@ si114x_poll_read(struct sensor *sensor,
     os_time_t time_ticks;
     os_time_t stop_ticks = 0;
     int rc, rc2;
+    struct sensor_itf *itf;
 
     /* If the read isn't looking for our data, don't do anything. */
     if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
         return SYS_EINVAL;
     }
+
+    itf = SENSOR_GET_ITF(sensor);
 
     si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
     pdd = &si114x->pdd;
@@ -1032,11 +1032,14 @@ si114x_stream_read(struct sensor *sensor,
     os_time_t time_ticks;
     os_time_t stop_ticks = 0;
     int rc, rc2;
+    struct sensor_itf *itf;
 
     /* If the read isn't looking for our data, don't do anything. */
     if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
         return SYS_EINVAL;
     }
+
+    itf = SENSOR_GET_ITF(sensor);
 
     si114x = (struct si114x *)SENSOR_GET_DEVICE(sensor);
     pdd = &si114x->pdd;
@@ -1268,13 +1271,13 @@ si114x_sensor_handle_interrupt(struct sensor *sensor)
 
     rc = si114x_get_int_status(itf, &int_status);
     if (rc) {
-        SI114X_ERR("Could not read int status err=0x%02x\n", rc);
+        SI114X_LOG(ERROR, "Could not read int status err=0x%02x\n", rc);
         goto err;
     }
 
     rc = si114x_clear_int(itf, int_status);
     if (rc) {
-        SI114X_ERR("Could not read int src err=0x%02x\n", rc);
+        SI114X_LOG(ERROR, "Could not read int src err=0x%02x\n", rc);
         goto err;
     }
 
@@ -1348,10 +1351,6 @@ si114x_init(struct os_dev *dev, void *arg)
 
     si114x = (struct si114x *) dev;
 
-#if MYNEWT_VAL(SI114X_LOG)
-    log_register(dev->od_name, &_log, &log_console_handler, NULL, LOG_SYSLEVEL);
-#endif
-
     sensor = &si114x->sensor;
 
 #if MYNEWT_VAL(SI114X_STATS)
@@ -1377,26 +1376,26 @@ si114x_init(struct os_dev *dev, void *arg)
     /* Check if we can read the chip address */
     rc = si114x_get_chip_id(arg, &id);
     if (rc) {
-        SI114X_ERR("unable to get chip id [1]: %d\n", rc);
+        SI114X_LOG(ERROR, "unable to get chip id [1]: %d\n", rc);
         goto err;
     }
 
     if (id != SI114X_PART_ID_SI1141 && id != SI114X_PART_ID_SI1142 && id != SI114X_PART_ID_SI1143) {
         rc = SYS_EINVAL;
-        SI114X_ERR("id not as expected: got: %d, expected %d or %d or %d\n", id,
+        SI114X_LOG(ERROR, "id not as expected: got: %d, expected %d or %d or %d\n", id,
                     SI114X_PART_ID_SI1141, SI114X_PART_ID_SI1142, SI114X_PART_ID_SI1143);
         goto err;
     }
 
     rc = si114x_get_chip_sequence(arg, &id);
     if (rc) {
-        SI114X_ERR("unable to get sequence id: %d\n", rc);
+        SI114X_LOG(ERROR, "unable to get sequence id: %d\n", rc);
         goto err;
     }
 
     if (id != 0x09) {
         rc = SYS_EINVAL;
-        SI114X_ERR("seq id not as expected: got: %d, expected 0x09\n", id);
+        SI114X_LOG(ERROR, "seq id not as expected: got: %d, expected 0x09\n", id);
         goto err;
     }
 
@@ -1423,7 +1422,7 @@ si114x_init(struct os_dev *dev, void *arg)
 
     return (0);
 err:
-    SI114X_ERR("Error initializing SI114X: %d\n", rc);
+    SI114X_LOG(ERROR, "Error initializing SI114X: %d\n", rc);
     return (rc);
 }
 
