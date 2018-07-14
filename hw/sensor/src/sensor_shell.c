@@ -28,6 +28,7 @@
 
 #include "sensor/sensor.h"
 #include "sensor/accel.h"
+#include "sensor/proximity.h"
 #include "sensor/mag.h"
 #include "sensor/light.h"
 #include "sensor/quat.h"
@@ -241,6 +242,7 @@ sensor_shell_read_listener(struct sensor *sensor, void *arg, void *data,
 {
     struct sensor_shell_read_ctx *ctx;
     struct sensor_accel_data *sad;
+    struct sensor_proximity_data *prx;
     struct sensor_mag_data *smd;
     struct sensor_light_data *sld;
     struct sensor_euler_data *sed;
@@ -421,6 +423,34 @@ sensor_shell_read_listener(struct sensor *sensor, void *arg, void *data,
         console_printf("\n");
     }
 
+    if (type == SENSOR_TYPE_PROXIMITY) {
+        prx = (struct sensor_proximity_data *) data;
+        if (prx->vis_is_valid) {
+            console_printf("visible = %s%%rh",
+                           sensor_ftostr(prx->vis, tmpstr, 13));
+        }
+        if (prx->ir_is_valid) {
+            console_printf("ir = %s%%rh",
+                           sensor_ftostr(prx->ir, tmpstr, 13));
+        }
+        if (prx->ps1_is_valid) {
+            console_printf("proximity 1 = %s%%rh",
+                           sensor_ftostr(prx->ps1, tmpstr, 13));
+        }
+        if (prx->ps2_is_valid) {
+            console_printf("proximity 2 = %s%%rh",
+                           sensor_ftostr(prx->ps2, tmpstr, 13));
+        }
+        if (prx->ps3_is_valid) {
+            console_printf("proximity 3 = %s%%rh",
+                           sensor_ftostr(prx->ps3, tmpstr, 13));
+        }
+        if (prx->aux_is_valid) {
+            console_printf("aux = %s%%rh",
+                           sensor_ftostr(prx->aux, tmpstr, 13));
+        }
+        console_printf("\n");
+    }
     return (0);
 }
 

@@ -24,9 +24,10 @@
 #include <errno.h>
 #include "console/console.h"
 #include "shell/shell.h"
-#include "si114x_priv.h"
-#include "si114x/si114x.h"
 #include "sensor/sensor.h"
+#include "sensor/proximity.h"
+#include "si114x/si114x.h"
+#include "si114x_priv.h"
 #include "parse/parse.h"
 
 static int si114x_shell_cmd(int argc, char **argv);

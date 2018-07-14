@@ -30,15 +30,21 @@ extern "C" {
 /* Data representing a singular read from a proximity sensor
  */
 struct sensor_proximity_data {
-    uint16_t ps1;
-    uint16_t ps2;
-    uint16_t ps3;
-    uint16_t als;
+    int16_t vis;
+    int16_t ir;
+    int16_t ps1;
+    int16_t ps2;
+    int16_t ps3;
+    int16_t aux;
+
     /* Validity */
+    uint8_t vis_is_valid:1;
+    uint8_t ir_is_valid:1;
     uint8_t ps1_is_valid:1;
     uint8_t ps2_is_valid:1;
     uint8_t ps3_is_valid:1;
-    uint8_t als_is_valid:1;
+    uint8_t aux_is_valid:1;
+
 } __attribute__((packed));
 
 #ifdef __cplusplus

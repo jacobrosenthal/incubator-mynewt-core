@@ -27,12 +27,15 @@
 extern "C" {
 #endif
 
-/* global interrupt masks */
-#define SI114X_IRQ_STATUS_ALS_INT_MASK                         	(0x3 << SI114X_IRQ_STATUS_ALS_INT_POS)
-#define SI114X_IRQ_STATUS_PS1_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS1_INT_POS)
-#define SI114X_IRQ_STATUS_PS2_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS2_INT_POS)
-#define SI114X_IRQ_STATUS_PS3_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS3_INT_POS)
-#define SI114X_IRQ_STATUS_CMD_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_CMD_INT_POS)
+
+/* global interrupt enables for int_pin_cfg */
+#define SI114X_IRQ_ENABLE_ALS0                          0x01
+#define SI114X_IRQ_ENABLE_ALS1                          0x02
+#define SI114X_IRQ_STATUS_PS1                         	0x04
+#define SI114X_IRQ_STATUS_PS2                         	0x08
+#define SI114X_IRQ_STATUS_PS3                         	0x10
+#define SI114X_IRQ_STATUS_CMD                         	0x20
+
 
 /* si114x_send_command masks */
 #define SI114X_PARAM_QUERY 0x80
@@ -84,6 +87,8 @@ extern "C" {
 #define SI114X_PARAM_PS_HYST_OFFSET 0x17
 #define SI114X_PARAM_PS_HISTORY_OFFSET 0x18
 #define SI114X_PARAM_ALS_HISTORY_OFFSET 0x19
+// Since the value, –1, in 2s complement is 0xFFFF also, it is not recommended to lower the ADC_OFFSET
+// less than 256 so that negative numbers will not be misinterpreted as an ADC saturation condition.
 #define SI114X_PARAM_ADC_OFFSET 0x1A
 
 #define SI114X_PARAM_LED_REC_OFFSET 0x1C
@@ -92,55 +97,68 @@ extern "C" {
 #define SI114X_PARAM_ALS_IR_ADC_MISC_OFFSET 0x1F
 
 
-/* interrupt mode for ambient sense */
-enum si114x_ambient_int_mode {
-    SI114X_ALS_IM_ALS_VIS_EVERY,
-    SI114X_ALS_IM_ALS_VIS_EXITING,
-    SI114X_ALS_IM_ALS_VIS_ENTERING,
-    SI114X_ALS_IM_ALS_IR_EXITING,
-    SI114X_ALS_IM_ALS_IR_ENTERING
-};
+/* int_mode for ambient */
+#define SI114X_ALS_IM_ALS_VIS_EVERY 0x00
+#define SI114X_ALS_IM_ALS_VIS_EXITING 0x01
+#define SI114X_ALS_IM_ALS_VIS_ENTERING 0x04
+#define SI114X_ALS_IM_ALS_IR_EXITING 0x03
+#define SI114X_ALS_IM_ALS_IR_ENTERING 0x06
 
-/* ambient sense setup struct */
-struct ambient {
-	enum si114x_ambient_int_mode int_mode;
-	uint8_t rate;
-	uint16_t threshold_high;
-	uint16_t threshold_low;
-	uint8_t int_en : 1;
-};
 
-/* interrupt mode for proximity sense */
-enum si114x_proximity_int_mode {
-    SI114X_PS_IM_MEASURE_COMPLETE = 0,
-    SI114X_PS_IM_MEASURE_CROSS_THS = 1,
-    SI114X_PS_IM_MEASURE_GREATER_THS = 2,
-};
+/* int_mode for proximity_sense */
+#define SI114X_PS1_IM_MEASURE_COMPLETE 0x00
+#define SI114X_PS1_IM_MEASURE_CROSS_THS 0x10
+#define SI114X_PS1_IM_MEASURE_GREATER_THS 0x30
 
-/* proximity sense adc input selection */
-enum si114x_proximity_mux {
-    SI114X_MUX_SMALL = 0x0,
-    SI114X_MUX_VISIBLE = 0x2,
-    SI114X_MUX_LARGE = 0x3,
-    SI114X_MUX_NO_PHOTODIODE = 0x6,
-    SI114X_MUX_GND = 0x25,
-    SI114X_MUX_TEMPERATURE = 0x65,
-    SI114X_MUX_VDD = 0x75
-};
+#define SI114X_PS2_IM_MEASURE_COMPLETE 0x00
+#define SI114X_PS2_IM_MEASURE_CROSS_THS 0x40
+#define SI114X_PS2_IM_MEASURE_GREATER_THS 0xC0
 
-/* led_drive_mask */
+#define SI114X_PS3_IM_MEASURE_COMPLETE 0x00
+#define SI114X_PS3_IM_MEASURE_CROSS_THS 0x01
+#define SI114X_PS3_IM_MEASURE_GREATER_THS 0x03
+
+
+/* mux for proximity_sense */
+#define SI114X_MUX_SMALL 0x0
+#define SI114X_MUX_VISIBLE 0x2
+#define SI114X_MUX_LARGE 0x3
+#define SI114X_MUX_NO_PHOTODIODE 0x6
+#define SI114X_MUX_GND 0x25
+#define SI114X_MUX_TEMPERATURE 0x65
+#define SI114X_MUX_VDD 0x75
+
+
+/* led_drive_mask for proximity_sense*/
 #define SI114X_PROXIMITY_DRIVE_PS1 0x01
 #define SI114X_PROXIMITY_DRIVE_PS2 0x02
 #define SI114X_PROXIMITY_DRIVE_PS3 0x04
 
+
+/* measure_mask for si114x_cfg */
+#define SI114X_MEASURE_AUX 0x40
+#define SI114X_MEASURE_IR 0x20
+#define SI114X_MEASURE_VIS 0x10
+#define SI114X_MEASURE_PS3 0x04
+#define SI114X_MEASURE_PS2 0x02
+#define SI114X_MEASURE_PS1 0x01
+
+
+/* ambient sense setup struct */
+struct ambient {
+    uint8_t rate;
+    uint16_t threshold_high;
+    uint16_t threshold_low;
+    uint8_t int_mode : 3;
+};
+
 /* proximity sense adc input selection */
 struct proximity_sense {
-	enum si114x_proximity_int_mode int_mode;
-	enum si114x_proximity_mux mux;
+    uint8_t int_mode;
+    uint16_t threshold;
+    uint8_t led_drive_mask : 3;
+	uint8_t mux : 7;
 	uint8_t current : 4;
-	uint16_t threshold;
-	uint8_t led_drive_mask : 3;
-	uint8_t int_en : 1;
 };
 
 /* proximity sense adc mode  */
@@ -160,14 +178,6 @@ struct proximity {
 	uint8_t adc_gain : 3;
 	uint8_t adc_recovery: 3;
 };
-
-/* measure_mask */
-#define SI114X_MEASURE_AUX 0x40
-#define SI114X_MEASURE_IR 0x20
-#define SI114X_MEASURE_VIS 0x10
-#define SI114X_MEASURE_PS3 0x04
-#define SI114X_MEASURE_PS2 0x02
-#define SI114X_MEASURE_PS1 0x01
 
 /* si114x operation mode  */
 enum si114x_op_mode {
@@ -207,7 +217,8 @@ struct si114x_cfg {
     struct proximity proximity;
 
     /* global interrupts */
-	uint8_t int_rd_clr : 1; //disable latched interrupts
+	uint8_t int_rd_clr : 1; // set to disable latched interrupts
+    uint8_t int_pin_cfg : 6;
 
     /* Notif config */
     struct si114x_notif_cfg *notif_cfg;
@@ -412,6 +423,15 @@ si114x_set_measure_mask(struct sensor_itf *itf, uint8_t measure_mask);
 int
 si114x_set_rd_clr(struct sensor_itf *itf, uint8_t enabled);
 
+/**
+ * Set interrupt pin configuration for interrupt 1
+ *
+ * @param the sensor interface
+ * @param config
+ * @return 0 on success, non-zero on failure
+ */
+int
+si114x_set_int_pin_cfg(struct sensor_itf *itf, uint8_t cfg);
 
 
 /* Really Advanced use only below */

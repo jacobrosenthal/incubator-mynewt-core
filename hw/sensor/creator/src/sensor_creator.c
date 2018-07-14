@@ -201,7 +201,10 @@ static struct sensor_itf i2c_0_itf_drv = {
 static struct sensor_itf i2c_1_itf_drv = {
     .si_type = SENSOR_ITF_I2C,
     .si_num  = 1,
-    .si_addr = MYNEWT_VAL(SI114X_SHELL_ITF_ADDR)
+    .si_addr = MYNEWT_VAL(SI114X_SHELL_ITF_ADDR),
+    .si_ints = {
+        { MYNEWT_VAL(SI114X_INT_PIN_HOST), 0,
+          0}}
 };
 #endif
 
@@ -585,28 +588,30 @@ config_si114x(void)
     dev = (struct os_dev *) os_dev_open("si114x_0", OS_TIMEOUT_NEVER, NULL);
     assert(dev != NULL);
 
-    si114x_cfg.op_mode = SI114X_OP_PS_ALS_AUTO;
-    si114x_cfg.int_en = 1;
+    si114x_cfg.op_mode = SI114X_OP_FORCED;//SI114X_OP_PS_ALS_AUTO
 
     si114x_cfg.measure_rate = 0x99;  // 4.78125ms measurement rate  (0x99 x 31.25 μs)
     si114x_cfg.measure_mask = SI114X_MEASURE_PS1;
+    si114x_cfg.int_pin_cfg = SI114X_IRQ_STATUS_PS1;
 
-    si114x_cfg.proximity_rate = 0x08; // PS Measurements made every time the device wakes up
-    si114x_cfg.ambient.rate = 0x08; // ALS Measurements made every time the device wakes up
+    si114x_cfg.proximity.adc_gain = 0x4;
+    si114x_cfg.proximity.adc_recovery = 0x07; // 511 ADC Clock (25.55 μs times 2PS_ADC_GAIN)
+    si114x_cfg.proximity.adc_mode = SI114X_ADC_MODE_NORMAL;
+    si114x_cfg.proximity.rate = 0x08; // PS Measurements made every time the device wakes up
 
-    si114x_cfg.proximity_adc_gain = 0x4;
-    si114x_cfg.proximity_adc_recovery = 0x07; // 511 ADC Clock (25.55 μs times 2PS_ADC_GAIN
-    si114x_cfg.proximity_adc_mode = SI114X_ADC_MODE_NORMAL;//RAW
+    si114x_cfg.proximity.one.current = 0x0b;
+    si114x_cfg.proximity.one.led_drive_mask = SI114X_PROXIMITY_DRIVE_PS1 | SI114X_PROXIMITY_DRIVE_PS2;
+    si114x_cfg.proximity.one.mux = SI114X_MUX_LARGE;
+    si114x_cfg.proximity.one.int_mode = SI114X_PS1_IM_MEASURE_COMPLETE;
 
-    si114x_cfg.ps1.current = 0x0b;
-    si114x_cfg.ps1.led_drive_mask = SI114X_PROXIMITY_DRIVE_PS1 | SI114X_PROXIMITY_DRIVE_PS2;
-    si114x_cfg.ps1.mux = SI114X_MUX_LARGE;
+    si114x_cfg.proximity.two.current = 0x0b;
+    si114x_cfg.proximity.two.mux = SI114X_MUX_LARGE;
 
-    si114x_cfg.ps2.current = 0x0b;
-    si114x_cfg.ps2.mux = SI114X_MUX_LARGE;
+    si114x_cfg.read_mode.mode = SI114X_READ_M_POLL;
+    //I dont like that this duplicates the int_pin_cfg
+    si114x_cfg.read_mode.int_cfg = SI114X_IRQ_STATUS_PS1;
 
-    //not sure about these..Certainly I could be a proximity... do we have another one?
-    // si114x_cfg.mask = SENSOR_TYPE_LIGHT | SENSOR_TYPE_PROXIMITY;
+    si114x_cfg.mask = SENSOR_TYPE_PROXIMITY;
 
     rc = si114x_config((struct si114x *) dev, &si114x_cfg);
 

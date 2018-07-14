@@ -24,10 +24,10 @@
 #include "os/mynewt.h"
 #include "hal/hal_i2c.h"
 #include "hal/hal_gpio.h"
+#include "sensor/proximity.h"
+#include "sensor/accel.h"
 #include "si114x/si114x.h"
 #include "si114x_priv.h"
-#include "sensor/sensor.h"
-#include "sensor/proximity.h"
 
 #if MYNEWT_VAL(SI114X_LOG)
 #include "modlog/modlog.h"
@@ -42,23 +42,23 @@
  */
 #define SI114X_MAX_INT_WAIT (4 * OS_TICKS_PER_SEC)
 
-//todo I need events (or user defined??)
+//todo I need events..
 const struct si114x_notif_cfg dflt_notif_cfg[] = {
     {
       .event     = SENSOR_EVENT_TYPE_SINGLE_TAP,
-      .int_cfg   = SI114X_IRQ_STATUS_ALS_INT_MASK
-    },
-    {
-      .event     = SENSOR_EVENT_TYPE_ORIENT_X_CHANGE,
       .int_cfg   = SI114X_IRQ_STATUS_PS1_INT_MASK
     },
     {
-      .event     = SENSOR_EVENT_TYPE_ORIENT_Y_CHANGE,
+      .event     = SENSOR_EVENT_TYPE_USER_DEFINED_2,
       .int_cfg   = SI114X_IRQ_STATUS_PS2_INT_MASK
     },
     {
-      .event     = SENSOR_EVENT_TYPE_ORIENT_Z_CHANGE,
+      .event     = SENSOR_EVENT_TYPE_USER_DEFINED_3,
       .int_cfg   = SI114X_IRQ_STATUS_PS3_INT_MASK
+    },
+    {
+      .event     = SENSOR_EVENT_TYPE_USER_DEFINED_4,
+      .int_cfg   = SI114X_IRQ_STATUS_ALS_INT_MASK
     },
    };
 
@@ -121,7 +121,7 @@ static const struct sensor_driver g_si114x_sensor_driver = {
 };
 
 /**
- * Write multiple length data to SI114X sensor over I2C  (MAX: 19 bytes)
+ * Write multiple length data to SI114X sensor over I2C  (MAX: 8 bytes)
  *
  * @param The sensor interface
  * @param register address
@@ -135,9 +135,7 @@ si114x_writelen(struct sensor_itf *itf, uint8_t addr, uint8_t *buffer,
                       uint8_t len)
 {
     int rc;
-    uint8_t payload[20] = { addr, 0, 0, 0, 0, 0, 0, 0,
-                               0, 0, 0, 0, 0, 0, 0, 0,
-                               0, 0, 0, 0};
+    uint8_t payload[9] = { addr, 0, 0, 0, 0, 0, 0, 0 };
 
     struct hal_i2c_master_data data_struct = {
         .address = itf->si_addr,
@@ -161,7 +159,9 @@ si114x_writelen(struct sensor_itf *itf, uint8_t addr, uint8_t *buffer,
     rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 1);
     if (rc) {
         SI114X_LOG(ERROR, "I2C access failed at address 0x%02X\n", data_struct.address);
+#if MYNEWT_VAL(SI114X_STATS)
         STATS_INC(g_si114xstats, write_errors);
+#endif
         goto err;
     }
 
@@ -187,6 +187,70 @@ si114x_write8(struct sensor_itf *itf, uint8_t reg, uint8_t value)
 
 
 /**
+ * Read data from the sensor of variable length (MAX: 12 bytes)
+ *
+ * @param The Sensor interface
+ * @param Register to read from
+ * @param Buffer to read into
+ * @param Length of the buffer
+ *
+ * @return 0 on success and non-zero on failure
+ */
+int
+si114x_readlen(struct sensor_itf *itf, uint8_t reg, uint8_t *buffer,
+               uint8_t len)
+{
+    int rc;
+    uint8_t payload[13] = { reg, 0, 0, 0, 0, 0, 0, 0,
+                              0, 0, 0, 0, 0};
+
+    struct hal_i2c_master_data data_struct = {
+        .address = itf->si_addr,
+        .len = 1,
+        .buffer = payload
+    };
+
+    /* Clear the supplied buffer */
+    memset(buffer, 0, len);
+
+    rc = sensor_itf_lock(itf, MYNEWT_VAL(SI114X_ITF_LOCK_TMO));
+    if (rc) {
+        goto err;
+    }
+
+    /* Register write */
+    rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 0);
+    if (rc) {
+        SI114X_LOG(ERROR, "I2C access failed at address 0x%02X\n",
+                    data_struct.address);
+#if MYNEWT_VAL(SI114X_STATS)
+        STATS_INC(g_si114xstats, errors);
+#endif
+        goto err;
+    }
+
+    /* Read len bytes back */
+    memset(payload, 0, sizeof(payload));
+    data_struct.len = len;
+    rc = hal_i2c_master_read(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 1);
+    if (rc) {
+        SI114X_LOG(ERROR, "Failed to read from 0x%02X:0x%02X\n",
+                    data_struct.address, reg);
+#if MYNEWT_VAL(SI114X_STATS)
+        STATS_INC(g_si114xstats, errors);
+#endif
+        goto err;
+    }
+
+    /* Copy the I2C results into the supplied buffer */
+    memcpy(buffer, payload, len);
+
+err:
+    sensor_itf_unlock(itf);
+    return rc;
+}
+
+/**
  * Reads a single byte from the specified register
  *
  * @param The Sensor interface
@@ -198,46 +262,7 @@ si114x_write8(struct sensor_itf *itf, uint8_t reg, uint8_t value)
 int
 si114x_read8(struct sensor_itf *itf, uint8_t reg, uint8_t *value)
 {
-    int rc;
-    uint8_t payload;
-
-    struct hal_i2c_master_data data_struct = {
-        .address = itf->si_addr,
-        .len = 1,
-        .buffer = &payload
-    };
-
-    rc = sensor_itf_lock(itf, MYNEWT_VAL(SI114X_ITF_LOCK_TMO));
-    if (rc) {
-        goto err;
-    }
-
-    /* Register write */
-    payload = reg;
-    rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 0);
-    if (rc) {
-        SI114X_LOG(ERROR, "I2C register write failed at address 0x%02X:0x%02X\n",
-                   data_struct.address, reg);
-#if MYNEWT_VAL(SI114X_STATS)
-        STATS_INC(g_si114xstats, errors);
-#endif
-        goto err;
-    }
-
-    /* Read one byte back */
-    payload = 0;
-    rc = hal_i2c_master_read(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 1);
-    *value = payload;
-    if (rc) {
-        SI114X_LOG(ERROR, "Failed to read from 0x%02X:0x%02X\n", data_struct.address, reg);
-#if MYNEWT_VAL(SI114X_STATS)
-        STATS_INC(g_si114xstats, errors);
-#endif
-    }
-
-err:
-    sensor_itf_unlock(itf);
-    return rc;
+    return si114x_readlen(itf, reg, value, 1);
 }
 
 /**
@@ -747,19 +772,19 @@ init_intpin(struct si114x *si114x, hal_gpio_irq_handler_t handler,
  * Disable interrupts
  *
  * @param itf The sensor interface
- * @param int_to_disable One of the global interrupt masks above
- * @param int_mode Mode to disable from si114x_proximity_int_mode or si114x_ambient_int_mode depending
+ * @param int_pin_cfg Mask of the global interrupts
+ * @param int_num Which interrupt number in the sensor interface to disable
  * @return 0 on success, non-zero on failure
  */
 int
-disable_interrupt(struct sensor *sensor, uint8_t int_to_disable, uint8_t int_mode)
+disable_interrupt(struct sensor *sensor, uint8_t int_pin_cfg, uint8_t int_num)
 {
     struct si114x *si114x;
     struct si114x_pdd *pdd;
     struct sensor_itf *itf;
     int rc;
 
-    if (int_to_disable == 0) {
+    if (int_pin_cfg == 0) {
         return SYS_EINVAL;
     }
 
@@ -767,11 +792,11 @@ disable_interrupt(struct sensor *sensor, uint8_t int_to_disable, uint8_t int_mod
     itf = SENSOR_GET_ITF(sensor);
     pdd = &si114x->pdd;
 
-    rc = si114x_clear_int_pin_cfg(itf, int_to_disable);
+    rc = si114x_clear_int_pin_cfg(itf, int_pin_cfg);
     if (rc) {
         return rc;
     }
-    pdd->int_enable &= ~int_to_disable;
+    pdd->int_enable &= ~int_pin_cfg;
 
     /* disable int pin */
     if (!pdd->int_enable) {
@@ -779,18 +804,9 @@ disable_interrupt(struct sensor *sensor, uint8_t int_to_disable, uint8_t int_mod
         /* disable interrupt in device */
         rc = si114x_set_int_enable(itf, 0);
         if (rc) {
-            pdd->int_enable |= int_to_disable;
+            pdd->int_enable |= int_pin_cfg;
             return rc;
         }
-    }
-
-    /* update interrupt setup in device */
-    if (int_to_disable <= 0xff) {
-        rc = si114x_clear_irq1_mode(itf, int_to_disable);
-        pdd->int1_mode &= ~int_mode;
-    } else {
-        rc = si114x_clear_irq2_mode(itf, int_to_disable);
-        pdd->int2_mode &= ~int_mode;
     }
 
     return rc;
@@ -800,19 +816,19 @@ disable_interrupt(struct sensor *sensor, uint8_t int_to_disable, uint8_t int_mod
  * Enable interrupts
  *
  * @param itf The sensor interface
- * @param int_to_enable One of the global interrupt masks above
- * @param int_mode Mode to enable from si114x_proximity_int_mode or si114x_ambient_int_mode depending
+ * @param int_pin_cfg Mask of the global interrupts
+ * @param int_num Which interrupt number in the sensor interface to enable
  * @return 0 on success, non-zero on failure
  */
 int
-enable_interrupt(struct sensor *sensor, uint8_t int_to_enable, uint8_t int_mode)
+enable_interrupt(struct sensor *sensor, uint8_t int_pin_cfg, uint8_t int_num)
 {
     struct si114x *si114x;
     struct si114x_pdd *pdd;
     struct sensor_itf *itf;
     int rc;
 
-    if (!int_to_enable) {
+    if (!int_pin_cfg) {
         rc = SYS_EINVAL;
         goto err;
     }
@@ -821,7 +837,7 @@ enable_interrupt(struct sensor *sensor, uint8_t int_to_enable, uint8_t int_mode)
     itf = SENSOR_GET_ITF(sensor);
     pdd = &si114x->pdd;
 
-    rc = si114x_clear_int(itf, int_to_enable);
+    rc = si114x_clear_int(itf, int_pin_cfg);
     if (rc) {
         goto err;
     }
@@ -836,23 +852,14 @@ enable_interrupt(struct sensor *sensor, uint8_t int_to_enable, uint8_t int_mode)
         }
     }
 
-    rc = si114x_set_int_pin_cfg(itf, int_to_enable);
+    rc = si114x_set_int_pin_cfg(itf, int_pin_cfg);
     if (rc) {
         goto err;
     }
-    pdd->int_enable |= int_to_enable;
-
-    /* enable interrupt in device */
-    if (int_to_enable <= 0xff) {
-        rc = si114x_set_irq1_mode(itf, int_mode);
-        pdd->int1_mode |= int_mode;
-    } else {
-        rc = si114x_set_irq2_mode(itf, int_mode);
-        pdd->int2_mode |= int_mode;
-    }
+    pdd->int_enable |= int_pin_cfg;
 
     if (rc) {
-        disable_interrupt(sensor, int_to_enable, int_mode);
+        disable_interrupt(sensor, int_pin_cfg, int_num);
         goto err;
     }
 
@@ -872,20 +879,33 @@ err:
  * @return 0 on success, non-zero on failure
  */
 int
-si114x_get_data(struct sensor_itf *itf, int16_t *x)
+si114x_get_data(struct sensor_itf *itf, int16_t *vis, int16_t *ir, int16_t *ps1, int16_t *ps2, int16_t *ps3, int16_t *aux)
 {
     int rc;
-    uint8_t payload[2] = {0};
+    uint8_t payload[12] = {0};
+    *vis = *ir = *ps1 = *ps2 = *ps3 = *aux = 0;
 
-    *x = 0;
-
-    //todo, what about others, how to tell?
-    rc = si114x_readlen(itf, SI114X_PS1_DATA0_ADDR, payload, 2);
+    //todo, only get as much data as were set up to measure...
+    rc = si114x_readlen(itf, SI114X_ALS_VIS_DATA0_ADDR, payload, 12);
     if (rc) {
         goto err;
     }
 
-    *x = payload[0] | (payload[1] << 8);
+    //Note very carefully that 16-bit registers are in the 'Little Endian' byte order
+    // todo do we have any little endian targets?
+    *vis = payload[0];
+    *ir = payload[2];
+    *ps1 = payload[4];
+    *ps2 = payload[6];
+    *ps3 = payload[8];
+    *aux = payload[10];
+
+    // *vis = payload[0] | (payload[1] << 8);
+    // *ir = payload[2] | (payload[3] << 8);
+    // *ps1 = payload[4] | (payload[5] << 8);
+    // *ps2 = payload[6] | (payload[7] << 8);
+    // *ps3 = payload[8] | (payload[9] << 8);
+    // *aux = payload[10] | (payload[11] << 8);
 
     return 0;
 err:
@@ -897,28 +917,33 @@ static int si114x_do_read(struct sensor *sensor, sensor_data_func_t data_func,
 {
     struct sensor_proximity_data proximity_data;
     struct sensor_itf *itf;
-    int16_t ps1;
+    int16_t vis, ir, ps1, ps2, ps3, aux;
     int rc;
 
     itf = SENSOR_GET_ITF(sensor);
 
     ps1 = 0;
 
-    rc = si114x_get_data(itf, &ps1);
+    rc = si114x_get_data(itf, &vis, &ir, &ps1, &ps2, &ps3, &aux);
     if (rc) {
         goto err;
     }
 
     //todo fill others
+    proximity_data.vis = vis;
+    proximity_data.ir = ir;
     proximity_data.ps1 = ps1;
-    // proximity_data.ps2 = ps2;
-    // proximity_data.ps3 = ps3;
-    // proximity_data.als = als;
+    proximity_data.ps2 = ps2;
+    proximity_data.ps3 = ps3;
+    proximity_data.aux = aux;
 
+    //todo, based on what?
+    proximity_data.vis_is_valid = 0;
+    proximity_data.ir_is_valid = 0;
     proximity_data.ps1_is_valid = 1;
     proximity_data.ps2_is_valid = 0;
     proximity_data.ps3_is_valid = 0;
-    proximity_data.als_is_valid = 0;
+    proximity_data.aux_is_valid = 0;
 
     /* Call data function */
     rc = data_func(sensor, data_arg, &proximity_data, SENSOR_TYPE_PROXIMITY);
@@ -932,7 +957,7 @@ err:
 }
 
 /**
- * Do accelerometer polling reads
+ * Do sensor polling reads
  *
  * @param sensor The sensor ptr
  * @param sensor_type The sensor type
@@ -956,6 +981,8 @@ si114x_poll_read(struct sensor *sensor,
     os_time_t stop_ticks = 0;
     int rc, rc2;
     struct sensor_itf *itf;
+    int8_t proximity, ambient;
+    int (*force)(struct sensor_itf*);
 
     /* If the read isn't looking for our data, don't do anything. */
     if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
@@ -968,7 +995,7 @@ si114x_poll_read(struct sensor *sensor,
     pdd = &si114x->pdd;
     cfg = &si114x->cfg;
 
-    if (cfg->read_mode.mode != SI114X_READ_M_STREAM) {
+    if (cfg->read_mode.mode != SI114X_READ_M_POLL) {
         return SYS_EINVAL;
     }
 
@@ -995,11 +1022,24 @@ si114x_poll_read(struct sensor *sensor,
         stop_ticks = os_time_get() + time_ticks;
     }
 
-    for (;;) {
-        //todo what about others
-        si114x_proximity_force(itf);
+    proximity = (cfg->measure_mask & (SI114X_MEASURE_PS1 | SI114X_MEASURE_PS2 | SI114X_MEASURE_PS3));
+    ambient = (cfg->measure_mask & (SI114X_MEASURE_AUX | SI114X_MEASURE_IR | SI114X_MEASURE_VIS));
+    if(proximity && ambient) {
+        force = si114x_force;
+    }else if(proximity) {
+        force = si114x_proximity_force;
+    }else if(ambient) {
+        force = si114x_ambient_force;
+    }else{
+        return SYS_EINVAL;
+    }
 
-        /* force at least one read for cases when fifo is disabled */
+    for (;;) {
+        rc = force(itf);
+        if (rc) {
+            goto err;
+        }
+
         rc = wait_interrupt(&si114x->intr);
         if (rc) {
             goto err;
@@ -1043,6 +1083,8 @@ si114x_stream_read(struct sensor *sensor,
     os_time_t stop_ticks = 0;
     int rc, rc2;
     struct sensor_itf *itf;
+    int8_t proximity, ambient;
+    enum si114x_op_mode mode;
 
     /* If the read isn't looking for our data, don't do anything. */
     if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
@@ -1059,9 +1101,6 @@ si114x_stream_read(struct sensor *sensor,
         return SYS_EINVAL;
     }
 
-        //todo what about others
-        si114x_proximity_force(itf);
-
     undo_interrupt(&si114x->intr);
 
     if (pdd->interrupt) {
@@ -1073,6 +1112,26 @@ si114x_stream_read(struct sensor *sensor,
 
     rc = enable_interrupt(sensor, cfg->read_mode.int_cfg,
                           0);
+    if (rc) {
+        return rc;
+    }
+
+    proximity = (cfg->measure_mask & (SI114X_MEASURE_PS1 | SI114X_MEASURE_PS2 | SI114X_MEASURE_PS3));
+    ambient = (cfg->measure_mask & (SI114X_MEASURE_AUX | SI114X_MEASURE_IR | SI114X_MEASURE_VIS));
+    if(proximity && ambient) {
+        mode = SI114X_OP_PS_ALS_AUTO;
+    }else if(proximity) {
+        mode = SI114X_OP_PS_AUTO;
+    }else if(ambient) {
+        mode = SI114X_OP_ALS_AUTO;
+    }else{
+        return SYS_EINVAL;
+    }
+
+    //todo theres another world where SI114X_READ_M_STREAM indicates you did this already... for power I like this better though
+    //though meas_rate ideally would be 0 until now as well.....
+    //I could see a quick reconfigure that doesnt reset that just sets meas and this mode, maybe before calling read stream?
+    rc = si114x_set_op_mode(itf, mode);
     if (rc) {
         return rc;
     }
@@ -1105,6 +1164,12 @@ si114x_stream_read(struct sensor *sensor,
     }
 
 err:
+
+    rc = si114x_set_op_mode(itf, SI114X_OP_FORCED);
+    if (rc) {
+        return rc;
+    }
+
     /* disable interrupt */
     pdd->interrupt = NULL;
     rc2 = disable_interrupt(sensor, cfg->read_mode.int_cfg,
@@ -1226,6 +1291,7 @@ si114x_sensor_unset_notification(struct sensor *sensor, sensor_event_type_t even
     }
 
     //todo need to be able to set the interrupt mode somehow
+    //do I. you should set that through the config
     rc = disable_interrupt(sensor, notif_cfg->int_cfg, 0);
 
 err:
@@ -1246,18 +1312,18 @@ static void
 si114x_inc_notif_stats(sensor_event_type_t event)
 {
 
-#if MYNEWT_VAL(SI114X_NOTIF_STATS)
+#if MYNEWT_VAL(SI114X_STATS) && MYNEWT_VAL(SI114X_NOTIF_STATS)
     switch (event) {
-        case SENSOR_EVENT_TYPE_SINGLE_TAP:
+        case SENSOR_EVENT_TYPE_USER_DEFINED_4:
             STATS_INC(g_si114xstats, als_notify);
             break;
-        case SENSOR_EVENT_TYPE_ORIENT_X_CHANGE:
+        case SENSOR_EVENT_TYPE_SINGLE_TAP:
             STATS_INC(g_si114xstats, ps1_notify);
             break;
-        case SENSOR_EVENT_TYPE_ORIENT_Y_CHANGE:
+        case SENSOR_EVENT_TYPE_USER_DEFINED_2:
             STATS_INC(g_si114xstats, ps2_notify);
             break;
-        case SENSOR_EVENT_TYPE_ORIENT_Z_CHANGE:
+        case SENSOR_EVENT_TYPE_USER_DEFINED_3:
             STATS_INC(g_si114xstats, ps3_notify);
             break;
         default:
@@ -1293,26 +1359,26 @@ si114x_sensor_handle_interrupt(struct sensor *sensor)
 
     if(int_status & SI114X_IRQ_STATUS_ALS_INT_MASK){
         sensor_mgr_put_notify_evt(&si114x->pdd.notify_ctx,
-                                  SENSOR_EVENT_TYPE_SINGLE_TAP);
-        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_SINGLE_TAP);
+                                  SENSOR_EVENT_TYPE_USER_DEFINED_4);
+        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_USER_DEFINED_4);
     }
 
     if(int_status & SI114X_IRQ_STATUS_PS1_INT_MASK){
         sensor_mgr_put_notify_evt(&si114x->pdd.notify_ctx,
-                                  SENSOR_EVENT_TYPE_ORIENT_Y_CHANGE);
-        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_ORIENT_Y_CHANGE);
+                                  SENSOR_EVENT_TYPE_SINGLE_TAP);
+        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_SINGLE_TAP);
     }
 
     if(int_status & SI114X_IRQ_STATUS_PS2_INT_MASK){
         sensor_mgr_put_notify_evt(&si114x->pdd.notify_ctx,
-                                  SENSOR_EVENT_TYPE_SINGLE_TAP);
-        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_SINGLE_TAP);
+                                  SENSOR_EVENT_TYPE_USER_DEFINED_2);
+        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_USER_DEFINED_2);
    }
 
    if(int_status & SI114X_IRQ_STATUS_PS3_INT_MASK){
         sensor_mgr_put_notify_evt(&si114x->pdd.notify_ctx,
-                                  SENSOR_EVENT_TYPE_ORIENT_Z_CHANGE);
-        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_ORIENT_Z_CHANGE);
+                                  SENSOR_EVENT_TYPE_USER_DEFINED_3);
+        si114x_inc_notif_stats(SENSOR_EVENT_TYPE_USER_DEFINED_3);
    }
 
     return 0;
@@ -1361,6 +1427,8 @@ si114x_init(struct os_dev *dev, void *arg)
 
     si114x = (struct si114x *) dev;
 
+    si114x->cfg.mask = SENSOR_TYPE_ALL;
+
     sensor = &si114x->sensor;
 
 #if MYNEWT_VAL(SI114X_STATS)
@@ -1406,6 +1474,13 @@ si114x_init(struct os_dev *dev, void *arg)
     if (id != 0x09) {
         rc = SYS_EINVAL;
         SI114X_LOG(ERROR, "seq id not as expected: got: %d, expected 0x09\n", id);
+        goto err;
+    }
+
+    /* Add the driver */
+    rc = sensor_set_driver(sensor, SENSOR_TYPE_PROXIMITY,
+            (struct sensor_driver *) &g_si114x_sensor_driver);
+    if (rc) {
         goto err;
     }
 
@@ -1709,65 +1784,45 @@ int
 si114x_set_proximity_sense(struct sensor_itf *itf, uint8_t number, struct proximity_sense *ps)
 {
     int rc;
-    uint8_t int_mask, mux_offset;
+    uint8_t mux_offset;
+    bool irq1 = false;
 
     switch (number) {
         case 1:
-            int_mask = SI114X_IRQ_ENABLE_PS1_IE_MASK;
             mux_offset = SI114X_PARAM_PS1_ADCMUX_OFFSET;
+            irq1 = true;
             break;
 
         case 2:
-            int_mask = SI114X_IRQ_ENABLE_PS2_IE_MASK;
             mux_offset = SI114X_PARAM_PS2_ADCMUX_OFFSET;
+            irq1 = true;
             break;
 
         case 3:
-            int_mask = SI114X_IRQ_ENABLE_PS3_IE_MASK;
             mux_offset = SI114X_PARAM_PS3_ADCMUX_OFFSET;
+            irq1 = false;
             break;
 
         default:
             return SYS_EINVAL;
     }
 
-    if(ps->int_en){
-        rc = si114x_set_int_pin_cfg(itf, int_mask);
+    if(irq1){
+        rc = si114x_set_irq1_mode(itf, ps->int_mode);
         if (rc) {
             goto err;
         }
-
-        if (int_mask <= 0xff) {
-            rc = si114x_set_irq1_mode(itf, ps->int_mode);
-            if (rc) {
-                goto err;
-            }
-        } else {
-            rc = si114x_set_irq2_mode(itf, ps->int_mode);
-            if (rc) {
-                goto err;
-            }
-        }
-
     }else{
-        rc = si114x_clear_int_pin_cfg(itf, int_mask);
+        rc = si114x_set_irq2_mode(itf, ps->int_mode);
         if (rc) {
             goto err;
-        }
-
-        if (int_mask <= 0xff) {
-            rc = si114x_clear_irq1_mode(itf, ps->int_mode);
-            if (rc) {
-                goto err;
-            }
-        } else {
-            rc = si114x_clear_irq2_mode(itf, ps->int_mode);
-            if (rc) {
-                goto err;
-            }
         }
     }
 
+    rc = si114x_set_param(itf, mux_offset, ps->mux);
+    if (rc) {
+        goto err;
+    }
 
     rc = si114x_set_proximity_current(itf, number, ps->current);
     if (rc) {
@@ -1775,11 +1830,6 @@ si114x_set_proximity_sense(struct sensor_itf *itf, uint8_t number, struct proxim
     }
 
     si114x_set_proximity_threshold(itf, number, ps->threshold);
-    if (rc) {
-        goto err;
-    }
-
-    rc = si114x_set_param(itf, mux_offset, ps->mux);
     if (rc) {
         goto err;
     }
@@ -1873,26 +1923,9 @@ si114x_set_ambient(struct sensor_itf *itf, struct ambient *ambient)
         goto err;
     }
 
-    if (ambient->int_en) {
-        rc = si114x_set_int_pin_cfg(itf, SI114X_IRQ_ENABLE_ALS_IE_MASK);
-        if (rc) {
-            goto err;
-        }
-
-        rc = si114x_set_irq1_mode(itf, ambient->int_mode);
-        if (rc) {
-            goto err;
-        }
-    }else{
-        rc = si114x_clear_int_pin_cfg(itf, SI114X_IRQ_ENABLE_ALS_IE_MASK);
-        if (rc) {
-            goto err;
-        }
-
-        rc = si114x_clear_irq1_mode(itf, ambient->int_mode);
-        if (rc) {
-            goto err;
-        }
+    rc = si114x_set_irq1_mode(itf, ambient->int_mode);
+    if (rc) {
+        goto err;
     }
 
     return 0;
@@ -2058,39 +2091,49 @@ si114x_config(struct si114x *si114x, struct si114x_cfg *cfg)
     if (rc) {
         goto err;
     }
+    si114x->cfg.measure_mask = cfg->measure_mask;
+
     rc = si114x_set_proximity(itf, &cfg->proximity);
     if (rc) {
         goto err;
     }
+    si114x->cfg.proximity = cfg->proximity;
 
     rc = si114x_set_ambient(itf, &cfg->ambient);
     if (rc) {
         goto err;
     }
+    si114x->cfg.ambient = cfg->ambient;
 
     rc = si114x_set_measure_rate(itf, cfg->measure_rate);
     if (rc) {
         goto err;
     }
+    si114x->cfg.measure_rate = cfg->measure_rate;
 
     rc = si114x_set_op_mode(itf, cfg->op_mode);
     if (rc) {
         goto err;
     }
+    si114x->cfg.op_mode = cfg->op_mode;
 
     rc = si114x_set_rd_clr(itf, cfg->int_rd_clr);
     if (rc) {
         goto err;
     }
+    si114x->cfg.int_rd_clr = cfg->int_rd_clr;
+
+    rc = si114x_set_int_pin_cfg(itf, cfg->int_pin_cfg );
+    if (rc) {
+        goto err;
+    }
+    si114x->cfg.int_pin_cfg = cfg->int_pin_cfg;
 
     rc = sensor_set_type_mask(&(si114x->sensor), cfg->mask);
     if (rc) {
         goto err;
     }
-
-    //todo .. this isnt kept up if anyone uses accessor methods..
-    //dont know why wasting all this memory to save this atm..
-    si114x_sensor_set_config(&(si114x->sensor), &(si114x->cfg));
+    si114x->cfg.mask = cfg->mask;
 
     si114x->cfg.read_mode.int_cfg = cfg->read_mode.int_cfg;
     si114x->cfg.read_mode.mode = cfg->read_mode.mode;
@@ -2102,8 +2145,6 @@ si114x_config(struct si114x *si114x, struct si114x_cfg *cfg)
         si114x->cfg.notif_cfg = cfg->notif_cfg;
         si114x->cfg.max_num_notif = cfg->max_num_notif;
     }
-
-    si114x->cfg.mask = cfg->mask;
 
     return 0;
 err:

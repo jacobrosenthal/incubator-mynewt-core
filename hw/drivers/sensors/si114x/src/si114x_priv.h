@@ -98,20 +98,20 @@ extern "C" {
 #define SI114X_PARAM_WR_ADDR 0x17
 #define SI114X_COMMAND_ADDR 0x18
 
-// 	0x80: Invalid Command Encountered during command processing 0x88: ADC Overflow encountered during PS1 measurement
-// 0x89: ADC Overflow encountered during PS2 measurement 0x8A: ADC Overflow encountered during PS3 measurement 0x8C: ADC Overflow encountered during ALS-VIS measurement 0x8D: ADC Overflow encountered during ALS-IR measurement 0x8E: ADC Overflow encountered during AUX measurement
 #define SI114X_RESPONSE_ADDR 0x20
 
-// 1. If the corresponding IRQ_ENABLE bit is also set when the IRQ_STATUS bit is set, the INT pin is asserted.
-// 2. When INT_MODE = 0, the host must write '1' to the corresponding XXX_INT bit to clear the interrupt.
-// 3. When INT_MODE = 1, the internal sequencer clears all the XXX_INT bits (and INT pin) automatically unless used with
-// PS (Parameter Field PSx_IM = 11). Use of INT_MODE = 0 is recommended.
 #define SI114X_IRQ_STATUS_ADDR 0x21
 #define SI114X_IRQ_STATUS_ALS_INT_POS							0
+#define SI114X_IRQ_STATUS_ALS_INT_MASK                         	(0x3 << SI114X_IRQ_STATUS_ALS_INT_POS)
 #define SI114X_IRQ_STATUS_PS1_INT_POS							2
+#define SI114X_IRQ_STATUS_PS1_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS1_INT_POS)
 #define SI114X_IRQ_STATUS_PS2_INT_POS							3
+#define SI114X_IRQ_STATUS_PS2_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS2_INT_POS)
 #define SI114X_IRQ_STATUS_PS3_INT_POS							4
+#define SI114X_IRQ_STATUS_PS3_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_PS3_INT_POS)
 #define SI114X_IRQ_STATUS_CMD_INT_POS							5
+#define SI114X_IRQ_STATUS_CMD_INT_MASK                         	(0x1 << SI114X_IRQ_STATUS_CMD_INT_POS)
+
 
 #define SI114X_ALS_VIS_DATA0_ADDR 0x22
 #define SI114X_ALS_VIS_DATA1_ADDR 0x23
@@ -141,12 +141,6 @@ extern "C" {
 #define SI114X_ANA_IN_KEY4_ADDR 0x3E
 
 
-
-
-
-
-struct sensor_itf;
-
 /**
  * Reads a single byte from the specified register
  *
@@ -161,7 +155,7 @@ si114x_read8(struct sensor_itf *itf, uint8_t reg, uint8_t *value);
 
 
 /**
- * Read data from the sensor of variable length (MAX: 8 bytes)
+ * Read data from the sensor of variable length (MAX: 12 bytes)
  *
  * @param The Sensor interface
  * @param Register to read from
@@ -187,7 +181,7 @@ int
 si114x_write8(struct sensor_itf *itf, uint8_t reg, uint8_t value);
 
 /**
- * Writes a multiple bytes to the specified register
+ * Writes a multiple bytes to the specified register (MAX: 8 bytes)
  *
  * @param The sensor interface
  * @param The register address to write to

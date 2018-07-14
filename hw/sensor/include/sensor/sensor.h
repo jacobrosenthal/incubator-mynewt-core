@@ -120,6 +120,20 @@ typedef enum {
     SENSOR_EVENT_TYPE_ORIENT_Y_CHANGE  = (1 << 8),
     /* Orientation Change Event in the Z direction */
     SENSOR_EVENT_TYPE_ORIENT_Z_CHANGE  = (1 << 9),
+
+    /* User defined event type 1 */
+    SENSOR_EVENT_TYPE_USER_DEFINED_1       = (1 << 26),
+    /* User defined event type 2 */
+    SENSOR_EVENT_TYPE_USER_DEFINED_2       = (1 << 27),
+    /* User defined event type 3 */
+    SENSOR_EVENT_TYPE_USER_DEFINED_3       = (1 << 28),
+    /* User defined event type 4 */
+    SENSOR_EVENT_TYPE_USER_DEFINED_4       = (1 << 29),
+    /* User defined event type 5 */
+    SENSOR_EVENT_TYPE_USER_DEFINED_5       = (1 << 30),
+    /* User defined event type 6 */
+    SENSOR_EVENT_TYPE_USER_DEFINED_6       = (1 << 31),
+
 } sensor_event_type_t;
 
 
