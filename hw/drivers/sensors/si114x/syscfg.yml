@@ -42,3 +42,6 @@ syscfg.defs:
     SI114X_NOTIF_STATS:
         description: 'Enable notification stats'
         value: 1
+    SI114X_ITF_LOCK_TMO:
+        description: 'SI114X interface lock timeout in milliseconds'
+        value: 1000

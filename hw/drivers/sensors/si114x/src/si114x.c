@@ -152,6 +152,11 @@ si114x_writelen(struct sensor_itf *itf, uint8_t addr, uint8_t *buffer,
 
     memcpy(&payload[1], buffer, len);
 
+    rc = sensor_itf_lock(itf, MYNEWT_VAL(SI114X_ITF_LOCK_TMO));
+    if (rc) {
+        goto err;
+    }
+
     /* Register write */
     rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 1);
     if (rc) {
@@ -160,8 +165,8 @@ si114x_writelen(struct sensor_itf *itf, uint8_t addr, uint8_t *buffer,
         goto err;
     }
 
-    return 0;
 err:
+    sensor_itf_unlock(itf);
     return rc;
 }
 
@@ -202,6 +207,11 @@ si114x_read8(struct sensor_itf *itf, uint8_t reg, uint8_t *value)
         .buffer = &payload
     };
 
+    rc = sensor_itf_lock(itf, MYNEWT_VAL(SI114X_ITF_LOCK_TMO));
+    if (rc) {
+        goto err;
+    }
+
     /* Register write */
     payload = reg;
     rc = hal_i2c_master_write(itf->si_num, &data_struct, OS_TICKS_PER_SEC / 10, 0);
@@ -225,8 +235,8 @@ si114x_read8(struct sensor_itf *itf, uint8_t reg, uint8_t *value)
 #endif
     }
 
-    return 0;
 err:
+    sensor_itf_unlock(itf);
     return rc;
 }
 
