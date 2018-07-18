@@ -577,7 +577,8 @@ si114x_clear_int(struct sensor_itf *itf, uint8_t src)
  * @param pointer to return interrupt status in
  * @return 0 on success, non-zero on failure
  */
-int si114x_get_int_status(struct sensor_itf *itf, uint8_t *status)
+int
+si114x_get_int_status(struct sensor_itf *itf, uint8_t *status)
 {
     return si114x_read8(itf, SI114X_IRQ_STATUS_ADDR, status);
 }
@@ -589,7 +590,8 @@ int si114x_get_int_status(struct sensor_itf *itf, uint8_t *status)
  * @param value to set (0 = disabled, 1 = enabled)
  * @return 0 on success, non-zero on failure
  */
-int si114x_set_int_enable(struct sensor_itf *itf, uint8_t enabled)
+int
+si114x_set_int_enable(struct sensor_itf *itf, uint8_t enabled)
 {
     uint8_t reg;
     int rc;
@@ -615,7 +617,8 @@ int si114x_set_int_enable(struct sensor_itf *itf, uint8_t enabled)
  * @param enabled The internal sequencer clears the INT pin automatically.
  * @return 0 on success, non-zero on failure
  */
-int si114x_set_rd_clr(struct sensor_itf *itf, uint8_t enabled)
+int
+si114x_set_rd_clr(struct sensor_itf *itf, uint8_t enabled)
 {
     uint8_t reg;
     int rc;
@@ -879,57 +882,51 @@ err:
  * @return 0 on success, non-zero on failure
  */
 int
-si114x_get_data(struct sensor_itf *itf, int16_t *vis, int16_t *ir, int16_t *ps1, int16_t *ps2, int16_t *ps3, int16_t *aux)
+si114x_get_data(struct sensor_itf *itf, struct sensor_proximity_data* spd)
 {
     int rc;
     uint8_t payload[12] = {0};
-    *vis = *ir = *ps1 = *ps2 = *ps3 = *aux = 0;
 
-    //todo, only get as much data as were set up to measure...
+    // todo, overkilling by as many as 10 bytes each time right now
+    // only get as much data as were set up to measure... 
     rc = si114x_readlen(itf, SI114X_ALS_VIS_DATA0_ADDR, payload, 12);
     if (rc) {
         goto err;
     }
 
-    //Note very carefully that 16-bit registers are in the 'Little Endian' byte order
-    // todo do we have any little endian targets?
-    *vis = payload[0];
-    *ir = payload[2];
-    *ps1 = payload[4];
-    *ps2 = payload[6];
-    *ps3 = payload[8];
-    *aux = payload[10];
-
-    // *vis = payload[0] | (payload[1] << 8);
-    // *ir = payload[2] | (payload[3] << 8);
-    // *ps1 = payload[4] | (payload[5] << 8);
-    // *ps2 = payload[6] | (payload[7] << 8);
-    // *ps3 = payload[8] | (payload[9] << 8);
-    // *aux = payload[10] | (payload[11] << 8);
+    // Register ordering is “little-endian” by nature. Therefore, if the host processor is “big endian”,
+    // simply pointing to ALS_VIS_DATA0, for example, and casting it as a 16-bit variable will result in a byte swap
+    // but sadly were mostly little endian..
+    spd->vis = payload[0] | (payload[1] << 8);
+    spd->ir = payload[2] | (payload[3] << 8);
+    spd->ps1 = payload[4] | (payload[5] << 8);
+    spd->ps2 = payload[6] | (payload[7] << 8);
+    spd->ps3 = payload[8] | (payload[9] << 8);
+    spd->aux = payload[10] | (payload[11] << 8);
 
     return 0;
 err:
     return rc;
 }
 
-static int si114x_do_read(struct sensor *sensor, sensor_data_func_t data_func,
+//todo this is so heavyweight
+static int si114x_do_read(struct sensor *sensor, uint8_t int_status, sensor_data_func_t data_func,
                             void * data_arg)
 {
-    struct sensor_proximity_data proximity_data;
+    struct sensor_proximity_data proximity_data = {0};
     struct sensor_itf *itf;
     int16_t vis, ir, ps1, ps2, ps3, aux;
     int rc;
 
     itf = SENSOR_GET_ITF(sensor);
 
-    ps1 = 0;
+    vis = ir = ps1 = ps2 = ps3 = aux = 0;
 
-    rc = si114x_get_data(itf, &vis, &ir, &ps1, &ps2, &ps3, &aux);
+    rc = si114x_get_data(itf, &proximity_data);
     if (rc) {
         goto err;
     }
 
-    //todo fill others
     proximity_data.vis = vis;
     proximity_data.ir = ir;
     proximity_data.ps1 = ps1;
@@ -937,13 +934,18 @@ static int si114x_do_read(struct sensor *sensor, sensor_data_func_t data_func,
     proximity_data.ps3 = ps3;
     proximity_data.aux = aux;
 
-    //todo, based on what?
-    proximity_data.vis_is_valid = 0;
-    proximity_data.ir_is_valid = 0;
-    proximity_data.ps1_is_valid = 1;
-    proximity_data.ps2_is_valid = 0;
-    proximity_data.ps3_is_valid = 0;
-    proximity_data.aux_is_valid = 0;
+    //todo no idea how vis aux and ir are valid SI114X_IRQ_STATUS_ALS_INT_MASK
+    if(int_status & SI114X_IRQ_STATUS_PS1_INT_MASK){
+        proximity_data.ps1_is_valid = 1;
+    }
+
+    if(int_status & SI114X_IRQ_STATUS_PS2_INT_MASK){
+        proximity_data.ps2_is_valid = 1;        
+    }
+
+    if(int_status & SI114X_IRQ_STATUS_PS3_INT_MASK){
+        proximity_data.ps3_is_valid = 1;
+    }
 
     /* Call data function */
     rc = data_func(sensor, data_arg, &proximity_data, SENSOR_TYPE_PROXIMITY);
@@ -977,12 +979,11 @@ si114x_poll_read(struct sensor *sensor,
     struct si114x_pdd *pdd;
     struct si114x *si114x;
     struct si114x_cfg *cfg;
-    os_time_t time_ticks;
-    os_time_t stop_ticks = 0;
     int rc, rc2;
     struct sensor_itf *itf;
     int8_t proximity, ambient;
     int (*force)(struct sensor_itf*);
+    uint8_t int_status;
 
     /* If the read isn't looking for our data, don't do anything. */
     if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
@@ -1014,14 +1015,6 @@ si114x_poll_read(struct sensor *sensor,
         return rc;
     }
 
-    if (time_ms != 0) {
-        rc = os_time_ms_to_ticks(time_ms, &time_ticks);
-        if (rc) {
-            goto err;
-        }
-        stop_ticks = os_time_get() + time_ticks;
-    }
-
     proximity = (cfg->measure_mask & (SI114X_MEASURE_PS1 | SI114X_MEASURE_PS2 | SI114X_MEASURE_PS3));
     ambient = (cfg->measure_mask & (SI114X_MEASURE_AUX | SI114X_MEASURE_IR | SI114X_MEASURE_VIS));
     if(proximity && ambient) {
@@ -1034,26 +1027,21 @@ si114x_poll_read(struct sensor *sensor,
         return SYS_EINVAL;
     }
 
-    for (;;) {
-        rc = force(itf);
-        if (rc) {
-            goto err;
-        }
+    rc = force(itf);
 
-        rc = wait_interrupt(&si114x->intr);
-        if (rc) {
-            goto err;
-        }
+    rc = wait_interrupt(&si114x->intr);
+    if (rc) {
+        goto err;
+    }
 
-        rc = si114x_do_read(sensor, read_func, read_arg);
-        if (rc) {
-            goto err;
-        }
+    rc = si114x_get_int_status(itf, &int_status);
+    if (rc) {
+        goto err;
+    }
 
-        if (time_ms != 0 && OS_TIME_TICK_GT(os_time_get(), stop_ticks)) {
-            break;
-        }
-
+    rc = si114x_do_read(sensor, int_status, read_func, read_arg);
+    if (rc) {
+        goto err;
     }
 
 err:
@@ -1085,6 +1073,7 @@ si114x_stream_read(struct sensor *sensor,
     struct sensor_itf *itf;
     int8_t proximity, ambient;
     enum si114x_op_mode mode;
+    uint8_t int_status;
 
     /* If the read isn't looking for our data, don't do anything. */
     if (!(sensor_type & SENSOR_TYPE_PROXIMITY)) {
@@ -1146,13 +1135,18 @@ si114x_stream_read(struct sensor *sensor,
 
     for (;;) {
 
-        /* force at least one read for cases when fifo is disabled */
+        //todo do I need this?
         rc = wait_interrupt(&si114x->intr);
         if (rc) {
             goto err;
         }
 
-        rc = si114x_do_read(sensor, read_func, read_arg);
+        rc = si114x_get_int_status(itf, &int_status);
+        if (rc) {
+            goto err;
+        }
+
+        rc = si114x_do_read(sensor, int_status, read_func, read_arg);
         if (rc) {
             goto err;
         }
@@ -1260,7 +1254,6 @@ si114x_sensor_set_notification(struct sensor *sensor, sensor_event_type_t event)
         goto err;
     }
 
-    //todo need to be able to set the interrupt mode somehow
     rc = enable_interrupt(sensor, notif_cfg->int_cfg, 0);
     if (rc) {
         goto err;
@@ -1290,8 +1283,6 @@ si114x_sensor_unset_notification(struct sensor *sensor, sensor_event_type_t even
         goto err;
     }
 
-    //todo need to be able to set the interrupt mode somehow
-    //do I. you should set that through the config
     rc = disable_interrupt(sensor, notif_cfg->int_cfg, 0);
 
 err:
@@ -1494,6 +1485,7 @@ si114x_init(struct os_dev *dev, void *arg)
     if (rc) {
         goto err;
     }
+
 
     init_interrupt(&si114x->intr, si114x->sensor.s_itf.si_ints);
     

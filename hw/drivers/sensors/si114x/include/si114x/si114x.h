@@ -253,9 +253,6 @@ struct si114x_pdd {
     struct si114x_int *interrupt;
     /* Interrupt enabled mask */
     uint8_t int_enable;
-    /* Interrupt config masks */
-    uint8_t int1_mode;
-    uint8_t int2_mode;
 };
 
 
